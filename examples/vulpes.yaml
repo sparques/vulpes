@@ -1,0 +1,51 @@
+# Vulpes configuration schema version.
+version: 1
+
+logging:
+  level: info
+  # Logs go to stdout when file is omitted.
+  # file: /var/log/vulpes.log
+
+audio:
+  - name: radio
+    capture: hw:CARD=Radio,DEV=0
+    playback: hw:CARD=Radio,DEV=0
+    sample_rate: 48000
+    channels: 1
+    buffer_ms: 100
+
+channels:
+  - name: vhf
+    audio: radio
+    audio_channel: 0
+    modem:
+      mode: afsk1200
+      amplitude: 0.5
+      # Dire Wolf profile A with its A+ nine-slicer receive strategy.
+      # Profile B selects Dire Wolf's FM discriminator instead.
+      profile: A
+      slicers: 9
+      # For mode psk2400, profile defaults to R and variant to V26B. Select
+      # variant V26A for compatibility with Dire Wolf 1.5 and earlier.
+    ptt:
+      type: serial
+      serial:
+        device: /dev/ttyUSB0
+        rts: true
+        rts_active: high
+    tx:
+      delay_ms: 300
+      tail_ms: 100
+      slot_ms: 100
+      persistence: 63
+
+interfaces:
+  kiss_tcp:
+    - listen: 127.0.0.1:8001
+      channel: vhf
+  # kiss_serial:
+  #   - device: /dev/ttyUSB1
+  #     baud: 9600
+  #     channel: vhf
+  agw_tcp:
+    - listen: 127.0.0.1:8000
