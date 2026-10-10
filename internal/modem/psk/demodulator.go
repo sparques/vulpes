@@ -13,46 +13,100 @@ type BitDecision struct {
 	Confidence int
 }
 
-// Demodulator translates Dire Wolf's local-oscillator profile R (V.26) and V
-// (V.27) receive paths.
+// Demodulator translates Dire Wolf's self-correlation and local-oscillator
+// receive profiles for V.26 and V.27.
 type Demodulator struct {
-	config                    Config
-	width, symbolRate         int
-	lowpass                   []float64
-	inPhase, quadrature       sampleHistory
-	phaseDelay                sampleHistory
-	delay                     int
-	loPhase, loStep, pllStep  uint32
-	pll, previousPLL          int32
-	previousSymbol            uint8
-	locked, goodFlag, badFlag bool
-	goodHistory, badHistory   uint32
-	scoreHistory              uint32
-	lockedInertia             float64
+	config                                     Config
+	width, symbolRate                          int
+	lowpass, prefilter                         []float64
+	input, prefilterInput, inPhase, quadrature sampleHistory
+	phaseDelay                                 sampleHistory
+	delay, cosineDelay, sineDelay              int
+	useLO                                      bool
+	loPhase, loStep, pllStep                   uint32
+	pll, previousPLL                           int32
+	previousSymbol                             uint8
+	locked, goodFlag, badFlag                  bool
+	goodHistory, badHistory                    uint32
+	scoreHistory                               uint32
+	lockedInertia                              float64
 }
 
-// NewDemodulator constructs the default Dire Wolf LO-based PSK receiver.
+// NewDemodulator constructs a Dire Wolf profile receiver. Empty Profile
+// selects local-oscillator profile R for V.26 and V for V.27.
 func NewDemodulator(config Config) (*Demodulator, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
 	width, _ := bitsPerSymbol(config.Mode)
 	symbolRate := bitRate(config.Mode) / width
-	filterWidth, cutoff := 1.007, 0.70
-	window := pskWindowTruncated
-	if config.Mode == V274800 {
-		filterWidth, cutoff, window = 0.844, 0.85, pskWindowCosine
+	profile := config.Profile
+	if profile == "" {
+		profile = "R"
+		if config.Mode == V274800 {
+			profile = "V"
+		}
 	}
-	taps := int(math.Round(filterWidth * float64(config.SampleRate) / float64(symbolRate)))
+	preEnabled, preBaud, preWidth, preWindow := false, 0.0, 0.0, pskWindowTruncated
+	lpBaud, lpWidth, lpWindow := 0.70, 1.007, pskWindowTruncated
+	lockedInertia := 0.925
+	useLO := profile == "R" || profile == "S" || profile == "V" || profile == "W"
+	if config.Mode == V274800 {
+		switch profile {
+		case "T":
+			lpBaud, lpWidth, lpWindow, lockedInertia = 1.15, 0.871, pskWindowCosine, 0.95
+		case "U":
+			preEnabled, preBaud, preWidth, preWindow = true, 0.9, 0.571, pskWindowFlatTop
+			lpBaud, lpWidth, lpWindow, lockedInertia = 1.15, 0.871, pskWindowCosine, 0.87
+		case "V":
+			lpBaud, lpWidth, lpWindow = 0.85, 0.844, pskWindowCosine
+		case "W":
+			preEnabled, preBaud, preWidth, preWindow = true, 0.85, 0.844, pskWindowCosine
+			lpBaud, lpWidth, lpWindow = 0.85, 0.844, pskWindowCosine
+		}
+	} else {
+		switch profile {
+		case "P":
+			lpBaud, lpWidth, lpWindow, lockedInertia = 0.60, 1.061, pskWindowCosine, 0.95
+		case "Q":
+			preEnabled, preBaud, preWidth, preWindow = true, 1.3, 1.497, pskWindowCosine
+			lpBaud, lpWidth, lpWindow, lockedInertia = 0.60, 1.061, pskWindowCosine, 0.87
+		case "R":
+			lpBaud, lpWidth, lpWindow = 0.70, 1.007, pskWindowTruncated
+		case "S":
+			preEnabled, preBaud, preWidth, preWindow = true, 0.55, 2.014, pskWindowFlatTop
+			lpBaud, lpWidth, lpWindow = 0.60, 1.061, pskWindowCosine
+		}
+	}
+	taps := int(math.Round(lpWidth * float64(config.SampleRate) / float64(symbolRate)))
 	delayTaps := int(math.Round(1.25 * float64(config.SampleRate) / float64(symbolRate)))
 	delay := int(math.Round(float64(config.SampleRate) / float64(symbolRate)))
+	cosineDelay, sineDelay := 0, 0
+	if config.Mode == V274800 {
+		cosineDelay = int(math.Round(8.0 / 9 * float64(config.SampleRate) / float64(symbolRate)))
+		sineDelay = int(math.Round(10.0 / 9 * float64(config.SampleRate) / float64(symbolRate)))
+	} else {
+		cosineDelay = int(math.Round(11.0 / 12 * float64(config.SampleRate) / float64(symbolRate)))
+		sineDelay = int(math.Round(13.0 / 12 * float64(config.SampleRate) / float64(symbolRate)))
+	}
+	inputTaps := max(sineDelay, int(math.Round(float64(config.SampleRate)/float64(symbolRate)))) + 1
+	var prefilter []float64
+	preTaps := 0
+	if preEnabled {
+		preTaps = int(math.Round(preWidth * float64(config.SampleRate) / float64(symbolRate)))
+		lower := (carrierFrequency - preBaud*float64(symbolRate)) / float64(config.SampleRate)
+		upper := (carrierFrequency + preBaud*float64(symbolRate)) / float64(config.SampleRate)
+		prefilter = pskBandpass(lower, upper, preTaps, preWindow)
+	}
 	return &Demodulator{
-		config: config, width: width, symbolRate: symbolRate,
-		lowpass: pskLowpass(cutoff*float64(symbolRate)/float64(config.SampleRate), taps, window),
+		config: config, width: width, symbolRate: symbolRate, useLO: useLO,
+		lowpass: pskLowpass(lpBaud*float64(symbolRate)/float64(config.SampleRate), taps, lpWindow), prefilter: prefilter,
+		input: newSampleHistory(inputTaps), prefilterInput: newSampleHistory(preTaps),
 		inPhase: newSampleHistory(taps), quadrature: newSampleHistory(taps),
 		phaseDelay: newSampleHistory(delayTaps), delay: delay,
+		cosineDelay: cosineDelay, sineDelay: sineDelay,
 		loStep:  phaseStep(carrierFrequency, config.SampleRate),
-		pllStep: phaseStep(float64(symbolRate), config.SampleRate), lockedInertia: 0.925,
+		pllStep: phaseStep(float64(symbolRate), config.SampleRate), lockedInertia: lockedInertia,
 	}, nil
 }
 
@@ -61,23 +115,46 @@ func (d *Demodulator) Process(samples []int16) []BitDecision {
 	result := make([]BitDecision, 0, len(samples)*bitRate(d.config.Mode)/d.config.SampleRate+1)
 	for _, sample := range samples {
 		value := float64(sample) / 16384
-		angle := float64(d.loPhase>>24) * 2 * math.Pi / 256
-		d.inPhase.push(value * math.Cos(angle))
-		d.quadrature.push(value * math.Sin(angle))
-		inPhase := d.inPhase.convolve(d.lowpass)
-		quadrature := d.quadrature.convolve(d.lowpass)
-		phase := 0.0
-		if inPhase != 0 || quadrature != 0 {
-			phase = math.Atan2(inPhase, quadrature)
+		if len(d.prefilter) != 0 {
+			d.prefilterInput.push(value)
+			value = d.prefilterInput.convolve(d.prefilter)
 		}
-		d.phaseDelay.push(phase)
-		delta := phase - d.phaseDelay.values[d.delay]
-		if d.config.Mode == V26B2400 {
-			delta -= math.Pi / 4
+		var delta float64
+		if d.useLO {
+			angle := float64(d.loPhase>>24) * 2 * math.Pi / 256
+			d.inPhase.push(value * math.Cos(angle))
+			d.quadrature.push(value * math.Sin(angle))
+			inPhase := d.inPhase.convolve(d.lowpass)
+			quadrature := d.quadrature.convolve(d.lowpass)
+			phase := 0.0
+			if inPhase != 0 || quadrature != 0 {
+				phase = math.Atan2(inPhase, quadrature)
+			}
+			d.phaseDelay.push(phase)
+			delta = phase - d.phaseDelay.values[d.delay]
+			if d.config.Mode == V26B2400 {
+				delta -= math.Pi / 4
+			}
+		} else {
+			d.input.push(value)
+			d.inPhase.push(value * d.input.values[d.cosineDelay])
+			d.quadrature.push(value * d.input.values[d.sineDelay])
+			inPhase := d.inPhase.convolve(d.lowpass)
+			quadrature := d.quadrature.convolve(d.lowpass)
+			delta = math.Atan2(inPhase, quadrature)
+			if d.config.Mode == V274800 {
+				delta += 3 * math.Pi / 2
+			} else if d.config.Mode == V26B2400 {
+				delta += math.Pi / 2
+			} else {
+				delta += 3 * math.Pi / 4
+			}
 		}
 		symbol, quality := phaseShiftToSymbol(delta, d.width)
 		result = append(result, d.advancePLL(symbol, quality)...)
-		d.loPhase += d.loStep
+		if d.useLO {
+			d.loPhase += d.loStep
+		}
 	}
 	return result
 }
@@ -89,6 +166,8 @@ func (d *Demodulator) CarrierDetected() bool { return d.locked }
 func (d *Demodulator) Reset() {
 	d.inPhase.clear()
 	d.quadrature.clear()
+	d.input.clear()
+	d.prefilterInput.clear()
 	d.phaseDelay.clear()
 	d.loPhase, d.pll, d.previousPLL, d.previousSymbol = 0, 0, 0, 0
 	d.locked, d.goodFlag, d.badFlag = false, false, false
@@ -189,6 +268,7 @@ type pskWindow uint8
 const (
 	pskWindowTruncated pskWindow = iota
 	pskWindowCosine
+	pskWindowFlatTop
 )
 
 func pskLowpass(cutoff float64, size int, window pskWindow) []float64 {
@@ -202,10 +282,43 @@ func pskLowpass(cutoff float64, size int, window pskWindow) []float64 {
 		} else {
 			filter[i] = math.Sin(2*math.Pi*cutoff*x) / (math.Pi * x)
 		}
-		if window == pskWindowCosine {
+		switch window {
+		case pskWindowCosine:
 			filter[i] *= math.Cos(x / float64(size) * math.Pi)
+		case pskWindowFlatTop:
+			phase := 2 * math.Pi * float64(i) / float64(size-1)
+			filter[i] *= 1 - 1.93*math.Cos(phase) + 1.29*math.Cos(2*phase) - 0.388*math.Cos(3*phase) + 0.028*math.Cos(4*phase)
 		}
 		gain += filter[i]
+	}
+	for i := range filter {
+		filter[i] /= gain
+	}
+	return filter
+}
+
+func pskBandpass(lower, upper float64, size int, window pskWindow) []float64 {
+	filter := make([]float64, size)
+	center := 0.5 * float64(size-1)
+	for i := range filter {
+		x := float64(i) - center
+		if x == 0 {
+			filter[i] = 2 * (upper - lower)
+		} else {
+			filter[i] = (math.Sin(2*math.Pi*upper*x) - math.Sin(2*math.Pi*lower*x)) / (math.Pi * x)
+		}
+		switch window {
+		case pskWindowCosine:
+			filter[i] *= math.Cos(x / float64(size) * math.Pi)
+		case pskWindowFlatTop:
+			phase := 2 * math.Pi * float64(i) / float64(size-1)
+			filter[i] *= 1 - 1.93*math.Cos(phase) + 1.29*math.Cos(2*phase) - 0.388*math.Cos(3*phase) + 0.028*math.Cos(4*phase)
+		}
+	}
+	angular := 2 * math.Pi * (lower + upper) / 2
+	gain := 0.0
+	for i, coefficient := range filter {
+		gain += 2 * coefficient * math.Cos((float64(i)-center)*angular)
 	}
 	for i := range filter {
 		filter[i] /= gain

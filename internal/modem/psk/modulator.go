@@ -30,10 +30,17 @@ func (c Config) Validate() error {
 	if c.Amplitude < 0 || c.Amplitude > 1 || math.IsNaN(c.Amplitude) {
 		return ErrInvalidConfig
 	}
-	if c.Profile != "" && !((c.Mode == V274800 && c.Profile == "V") || (c.Mode != V274800 && c.Profile == "R")) {
+	if c.Profile != "" && !validProfile(c.Mode, c.Profile) {
 		return ErrInvalidConfig
 	}
 	return nil
+}
+
+func validProfile(mode Mode, profile string) bool {
+	if mode == V274800 {
+		return profile == "T" || profile == "U" || profile == "V" || profile == "W"
+	}
+	return profile == "P" || profile == "Q" || profile == "R" || profile == "S"
 }
 
 // Modulator groups bits into symbols and generates Dire Wolf's phase-jump PSK

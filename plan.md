@@ -194,7 +194,8 @@ recorded clean-signal expectations, and recover after malformed/noisy frames.
 - [x] Implement differential 8PSK/V.27 modulation at 4800 bit/s.
 - [x] Implement differential 8PSK/V.27 demodulation at 4800 bit/s.
 - [x] Port/adapt carrier mixing, low-pass filtering, symbol timing, phase
-  decision, and ambiguity handling from the reference design.
+  decision, and ambiguity handling from the reference design, with Dire Wolf
+  receive profiles P/Q/R/S for V.26 and T/U/V/W for V.27.
 - [x] Test symbol packing independently from waveform generation and recovery.
 - [x] Cross-test each mapping/mode against Dire Wolf-generated WAVs and make
   Dire Wolf decode Vulpes-generated WAVs.

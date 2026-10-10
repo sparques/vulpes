@@ -36,3 +36,16 @@ The bidirectional PSK interoperability tests cover V.26A, V.26B/MFJ, and V.27.
 They require Dire Wolf `atest` to decode Vulpes WAVs and require Vulpes to
 decode fresh Dire Wolf `gen_packets` WAVs. Each direction skips when its
 corresponding Dire Wolf utility is unavailable.
+
+PSK receiver profile names and their Dire Wolf equivalents are:
+
+| Mode | Vulpes profile | Dire Wolf behavior |
+| --- | --- | --- |
+| 2400 V.26 | P | Self correlation, no prefilter |
+| 2400 V.26 | Q | Self correlation, band-pass prefilter |
+| 2400 V.26 | R | Local oscillator, no prefilter (default) |
+| 2400 V.26 | S | Local oscillator, band-pass prefilter |
+| 4800 V.27 | T | Self correlation, no prefilter |
+| 4800 V.27 | U | Self correlation, band-pass prefilter |
+| 4800 V.27 | V | Local oscillator, no prefilter (default) |
+| 4800 V.27 | W | Local oscillator, band-pass prefilter |

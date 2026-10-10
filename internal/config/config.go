@@ -320,12 +320,12 @@ func validateModem(path string, modem Modem, sampleRate int) error {
 			return fmt.Errorf("%s: variant does not apply to AFSK", path)
 		}
 	} else if modem.Mode == "psk2400" {
-		if modem.Profile != "R" || (modem.Variant != "V26A" && modem.Variant != "V26B") || modem.Slicers != 0 {
-			return fmt.Errorf("%s: PSK 2400 requires profile R, variant V26A or V26B, and no slicers", path)
+		if (modem.Profile != "P" && modem.Profile != "Q" && modem.Profile != "R" && modem.Profile != "S") || (modem.Variant != "V26A" && modem.Variant != "V26B") || modem.Slicers != 0 {
+			return fmt.Errorf("%s: PSK 2400 requires profile P, Q, R, or S, variant V26A or V26B, and no slicers", path)
 		}
 	} else if modem.Mode == "psk4800" {
-		if modem.Profile != "V" || modem.Variant != "" || modem.Slicers != 0 {
-			return fmt.Errorf("%s: PSK 4800 requires profile V and no variant or slicers", path)
+		if (modem.Profile != "T" && modem.Profile != "U" && modem.Profile != "V" && modem.Profile != "W") || modem.Variant != "" || modem.Slicers != 0 {
+			return fmt.Errorf("%s: PSK 4800 requires profile T, U, V, or W and no variant or slicers", path)
 		}
 	} else if modem.Profile != "" || modem.Variant != "" || modem.Slicers != 0 {
 		return fmt.Errorf("%s: profile, variant, and slicers do not apply to this mode", path)

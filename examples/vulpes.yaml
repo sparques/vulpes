@@ -25,8 +25,6 @@ channels:
       # Profile B selects Dire Wolf's FM discriminator instead.
       profile: A
       slicers: 9
-      # For mode psk2400, profile defaults to R and variant to V26B. Select
-      # variant V26A for compatibility with Dire Wolf 1.5 and earlier.
     ptt:
       type: serial
       serial:
@@ -38,6 +36,10 @@ channels:
       tail_ms: 100
       slot_ms: 100
       persistence: 63
+
+# For PSK, set profile to one of P/Q/R/S at 2400 or T/U/V/W at 4800.
+# Defaults are R for 2400 and V for 4800. 2400 variant defaults to V26B;
+# choose V26A for Dire Wolf 1.5 and earlier compatibility.
 
 interfaces:
   kiss_tcp:
