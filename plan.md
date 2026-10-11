@@ -396,6 +396,14 @@ tests, TCP client interoperability, race tests, vet, and builds pass with
 hardware. Real-device and release-tag verification therefore remain unchecked
 rather than being inferred from mocks or clean skips.
 
+Final gate detail: `goimports` completed without further changes; unit and
+integration tests, race tests, vet, and builds passed. Dire Wolf
+`gen_packets`, `atest`, `kissutil`, and EAS interoperability tests ran and
+passed. Only the explicitly hardware-gated serial, GPIO, and CM108 tests
+skipped. The host exposes onboard ALSA capture/playback but no loopback cable,
+no USB serial device, root-only `/dev/gpiochip0`, and no CM108-family USB
+device, so those physical acceptance records cannot be produced here.
+
 - [x] Build a table-driven end-to-end suite spanning every modem, sample rate,
   channel mapping, audio direction, KISS transport, and AGW transport.
 - [x] Add deterministic signal impairments and store per-mode thresholds so DSP
@@ -413,7 +421,7 @@ rather than being inferred from mocks or clean skips.
   every mode, KISS TCP/serial, AGW TCP, PTT, diagnostics, and limitations.
 - [x] Add graceful error messages and operational counters for audio overruns,
   bad FCS, decoder activity, DCD, queue drops, and client failures.
-- [ ] Run final `goimports`, `GOCACHE=/tmp go test ./...`, race tests, vet,
+- [x] Run final `goimports`, `GOCACHE=/tmp go test ./...`, race tests, vet,
   builds, and all interoperability/regression suites.
 - [ ] Tag the first release only after every included feature has an automated
   acceptance test or an explicitly documented hardware-only test result.
