@@ -131,7 +131,7 @@ empty-package checks run reproducibly.
   streaming components.
 - [x] Implement the minimal AX.25 binary frame parser/builder required by AGW
   monitor/unproto operations without adding APRS interpretation.
-- [ ] Add fuzz tests for HDLC, AX.25, KISS, and later AGW parsers; malformed
+- [x] Add fuzz tests for HDLC, AX.25, KISS, and later AGW parsers; malformed
   input must not panic or allocate without a bound.
 
 Acceptance: randomized payloads survive encode/decode, single-bit corruption is
@@ -206,10 +206,11 @@ interoperability and their recorded impairment suites.
 
 ### 5. 9600 G3RUH/GMSK
 
-- [ ] Implement the transmit shaping and scrambled NRZI/baseband waveform used
-  by Dire Wolf's G3RUH/K9NG mode.
-- [ ] Implement receive filtering/equalization, optional upsampling, clock
-  recovery, slicing, descrambling, and DCD.
+- [x] Implement the scrambled NRZI/baseband waveform used by Dire Wolf's
+  G3RUH/K9NG mode, including continuous phase and fractional sample timing.
+- [x] Implement Dire Wolf's cosine-window receive filter, polyphase
+  upsampling, AGC, transition-interpolating clock recovery, slicing,
+  descrambling, and DCD.
 - [ ] Validate polarity inversion and recovery from loss of carrier/state.
 - [ ] Cross-test Vulpes and Dire Wolf WAV generation/reception in both
   directions.
@@ -220,6 +221,17 @@ Acceptance: 9600 AX.25 frames interoperate with Dire Wolf fixtures at 44.1 and
 48 kHz and sustain long randomized round trips without decoder state drift.
 
 ### 6. AIS and EAS SAME receive modes
+
+Partial implementation note: `internal/modem/ais` now reuses the Dire
+Wolf-compatible 9600 bit/s GMSK receive filter/PLL, skips G3RUH descrambling,
+checks AIS payload lengths after HDLC/FCS recovery, and creates armored
+`!AIVDM` sentences. This remains unchecked until payload vectors and audio
+interoperability are validated.
+
+`internal/modem/eas` now uses the Dire Wolf-derived profile-A AFSK detector,
+including the 520.83 bit/s timing correction, and gathers SAME `ZCZC`/`NNNN`
+messages after the 64-bit alternating-bit preamble. Validation and repeated
+message handling remain open.
 
 - [ ] Implement AIS GMSK demodulation, training/sync detection, NRZI/HDLC
   framing, de-stuffing, and FCS validation according to the Dire Wolf reference
@@ -239,16 +251,30 @@ known EAS broadcasts reproduce the expected SAME text with duplicate handling.
 
 ### 7. TNC runtime and transmit control
 
+Partial implementation note: `internal/modem.NewReceiver` and
+`internal/modem.NewTransmitter` provide mode selection and common streaming
+interfaces, and `internal/tnc` builds per-channel modem endpoints from YAML,
+emits received modem events through bounded subscriber queues, and provides
+bounded frame queues and on-demand PCM encoding. Transmit dequeue now uses DCD-aware 10 ms carrier polling,
+SLOTTIME intervals, the Dire Wolf `random <= persistence` decision, and
+full-duplex bypass, with cancellation and a 60-second acquisition timeout.
+The CLI/audio pipelines and KISS/AGW application wiring are still pending. A channel transmit operation now keys
+PTT after CSMA grants access, routes mono output to the configured stereo
+channel, writes the full burst, and fail-safely unkeys on cancellation/errors.
+
 - [ ] Implement channel configuration, lifecycle, frame event fan-out, metrics,
   backpressure policy, and graceful shutdown.
-- [ ] Implement bounded per-channel transmit queues and serialized access to a
-  shared stereo playback device.
-- [ ] Implement DCD-aware p-persistence CSMA with `TXDELAY`, `PERSIST`,
+- [x] Implement bounded per-channel transmit queues and serialized access to a
+  shared stereo playback device using a shared `audio.PlaybackBus` per endpoint.
+- [x] Add bounded receive-event subscriptions and a KISS forwarding loop for
+  channel frame events; AIS/EAS events remain available to non-KISS consumers.
+- [x] Implement DCD-aware p-persistence CSMA with `TXDELAY`, `PERSIST`,
   `SLOTTIME`, `TXTAIL`, and full-duplex settings in KISS units.
-- [ ] Implement preamble/tail flag calculation correctly for PSK symbols as
+- [x] Implement preamble/tail flag calculation correctly for PSK symbols as
   well as one-bit-per-symbol modes (avoiding Dire Wolf's noted timing shortcut).
-- [ ] Define a PTT interface with key/unkey sequencing and fail-safe unkey on
-  cancellation, shutdown, panic recovery, or device error.
+- [x] Define a PTT interface with key/unkey sequencing and fail-safe unkey on
+  cancellation or playback/device error; channel close interrupts pending
+  waits and controller shutdown unkeys hardware.
 - [x] Implement serial-port PTT compatible with Dire Wolf: selectable RTS and/or
   DTR control lines, independent active-high/active-low polarity, and safe
   initial/final line state.
@@ -271,13 +297,23 @@ clients without one client stalling another.
 
 ### 8. KISS over TCP and serial
 
+Partial implementation note: `internal/kiss.TCPServer` now supports
+concurrent TCP clients, port-nibble routing, optional listener channel binding,
+bounded per-client outbound queues, frame broadcast, and nonblocking handling
+of inbound data frames. `internal/kiss.SerialServer` now provides the same
+framing/routing with raw 8N1 port opening, bounded output, read timeout, and
+shutdown interruption. TXDELAY, PERSISTENCE, SLOTTIME, TXTAIL, and FULLDUPLEX
+commands now update per-channel timing state atomically. SET_HARDWARE, reconnect
+behavior, applying persistence/slot timing in CSMA, and protocol interoperability
+validation remain open.
+
 - [x] Implement streaming KISS FEND/FESC framing and escaping with independent
   parser state per connection.
 - [ ] Support data, TXDELAY, PERSISTENCE, SLOTTIME, TXTAIL, FULLDUPLEX, and the
   useful Dire Wolf SET_HARDWARE queries/commands; reject unsupported commands
   safely.
-- [ ] Implement channel/port nibble routing and enforce payload/channel limits.
-- [ ] Implement concurrent TCP KISS clients, optional per-listener channel
+- [x] Implement channel/port nibble routing and enforce payload/channel limits.
+- [x] Implement concurrent TCP KISS clients, optional per-listener channel
   binding, and receive broadcast semantics.
 - [ ] Implement KISS on configured serial devices and PTYs with baud/raw-mode
   setup, reconnect/poll behavior, and clean device removal handling.
@@ -291,9 +327,10 @@ binary AX.25 frames, change timing parameters, reconnect, and coexist.
 
 ### 9. AGWPE over TCP
 
-- [ ] Implement the 36-byte little-endian AGW header, bounded payload reading,
-  fixed-width callsigns, and safe connection state.
-- [ ] Implement core query/control messages: `R` version, `G` port list, `g`
+- [x] Implement the Dire Wolf-compatible 36-byte little-endian AGW header,
+  bounded payload decoding, and fixed-width callsigns.
+- [x] Add safe per-client connection state and graceful TCP shutdown.
+- [x] Implement core query/control messages: `R` version, `G` port list, `g`
   port capabilities, `X`/`x` callsign registration, and `y` queue depth.
 - [ ] Implement raw frame receive/transmit `k`/`K`, monitor enable/output
   `m` plus `U`/`I`/`S`/`T`, and unproto transmit `M`/`V`.

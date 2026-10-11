@@ -95,7 +95,7 @@ func NewDemodulator(config Config) (*Demodulator, error) {
 		markDelta: phaseDelta(config.Mark, config.SampleRate), spaceDelta: phaseDelta(config.Space, config.SampleRate),
 		centerDelta:   phaseDelta(0.5*(config.Mark+config.Space), config.SampleRate),
 		normalizeRate: float64(config.SampleRate) / (math.Abs(config.Mark-config.Space) * math.Pi),
-		pllStep:       phaseDelta(float64(config.Baud), config.SampleRate), slicers: make([]slicerState, slicerCount),
+		pllStep:       phaseDelta(pllBaud(config.Baud), config.SampleRate), slicers: make([]slicerState, slicerCount),
 	}, nil
 }
 
@@ -198,7 +198,7 @@ func (d *Demodulator) Reset() {
 	d.markPhase, d.spacePhase = 0, 0
 	d.centerPhase, d.previousCarrierPhase = 0, 0
 	d.markPeak, d.markValley, d.spacePeak, d.spaceValley = 0, 0, 0, 0
-	d.pllStep = phaseDelta(float64(d.config.Baud), d.config.SampleRate)
+	d.pllStep = phaseDelta(pllBaud(d.config.Baud), d.config.SampleRate)
 	clear(d.slicers)
 }
 
@@ -341,6 +341,13 @@ func rootRaisedCosine(size int, rolloff, samplesPerSymbol float64) []float64 {
 
 func phaseDelta(frequency float64, sampleRate int) uint32 {
 	return uint32(math.Round(math.Ldexp(1, 32) * frequency / float64(sampleRate)))
+}
+
+func pllBaud(baud int) float64 {
+	if baud == 521 {
+		return 520.83
+	}
+	return float64(baud)
 }
 func oscillator(phase uint32) (float64, float64) {
 	angle := float64(phase>>24) * 2 * math.Pi / 256

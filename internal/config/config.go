@@ -63,6 +63,7 @@ type Modem struct {
 	Profile   string  `yaml:"profile,omitempty"`
 	Variant   string  `yaml:"variant,omitempty"`
 	Slicers   int     `yaml:"slicers,omitempty"`
+	Upsample  int     `yaml:"upsample,omitempty"`
 }
 
 type PTT struct {
@@ -316,19 +317,23 @@ func validateModem(path string, modem Modem, sampleRate int) error {
 		if modem.Slicers < 1 || modem.Slicers > 9 {
 			return fmt.Errorf("%s: slicers must be between 1 and 9", path)
 		}
-		if modem.Variant != "" {
-			return fmt.Errorf("%s: variant does not apply to AFSK", path)
+		if modem.Variant != "" || modem.Upsample != 0 {
+			return fmt.Errorf("%s: variant and upsample do not apply to AFSK", path)
 		}
 	} else if modem.Mode == "psk2400" {
-		if (modem.Profile != "P" && modem.Profile != "Q" && modem.Profile != "R" && modem.Profile != "S") || (modem.Variant != "V26A" && modem.Variant != "V26B") || modem.Slicers != 0 {
-			return fmt.Errorf("%s: PSK 2400 requires profile P, Q, R, or S, variant V26A or V26B, and no slicers", path)
+		if (modem.Profile != "P" && modem.Profile != "Q" && modem.Profile != "R" && modem.Profile != "S") || (modem.Variant != "V26A" && modem.Variant != "V26B") || modem.Slicers != 0 || modem.Upsample != 0 {
+			return fmt.Errorf("%s: PSK 2400 requires profile P, Q, R, or S, variant V26A or V26B, and does not accept slicers or upsample", path)
 		}
 	} else if modem.Mode == "psk4800" {
-		if (modem.Profile != "T" && modem.Profile != "U" && modem.Profile != "V" && modem.Profile != "W") || modem.Variant != "" || modem.Slicers != 0 {
-			return fmt.Errorf("%s: PSK 4800 requires profile T, U, V, or W and no variant or slicers", path)
+		if (modem.Profile != "T" && modem.Profile != "U" && modem.Profile != "V" && modem.Profile != "W") || modem.Variant != "" || modem.Slicers != 0 || modem.Upsample != 0 {
+			return fmt.Errorf("%s: PSK 4800 requires profile T, U, V, or W and does not accept variant, slicers, or upsample", path)
 		}
-	} else if modem.Profile != "" || modem.Variant != "" || modem.Slicers != 0 {
-		return fmt.Errorf("%s: profile, variant, and slicers do not apply to this mode", path)
+	} else if modem.Mode == "g3ruh9600" {
+		if modem.Profile != "" || modem.Variant != "" || modem.Slicers != 0 || modem.Upsample < 0 || modem.Upsample > 4 {
+			return fmt.Errorf("%s: G3RUH accepts only an upsample factor from 0 (automatic) through 4", path)
+		}
+	} else if modem.Profile != "" || modem.Variant != "" || modem.Slicers != 0 || modem.Upsample != 0 {
+		return fmt.Errorf("%s: profile, variant, slicers, and upsample do not apply to this mode", path)
 	}
 	return nil
 }

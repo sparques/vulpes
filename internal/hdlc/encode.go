@@ -8,6 +8,14 @@ const flagByte = 0x7e
 // stuffing, and the requested number of leading and trailing flags. At least
 // one leading and trailing flag is always emitted.
 func Encode(payload []byte, leadingFlags, trailingFlags int) []bool {
+	levels, _ := EncodeFrom(payload, leadingFlags, trailingFlags, false)
+	return levels
+}
+
+// EncodeFrom returns an NRZI stream and its final line level, starting from
+// initialLevel. It is useful when successive frames share a continuous modem
+// stream.
+func EncodeFrom(payload []byte, leadingFlags, trailingFlags int, initialLevel bool) ([]bool, bool) {
 	if leadingFlags < 1 {
 		leadingFlags = 1
 	}
@@ -41,14 +49,14 @@ func Encode(payload []byte, leadingFlags, trailingFlags int) []bool {
 	}
 
 	levels := make([]bool, len(raw))
-	level := false
+	level := initialLevel
 	for i, bit := range raw {
 		if !bit {
 			level = !level
 		}
 		levels[i] = level
 	}
-	return levels
+	return levels, level
 }
 
 func appendByteBits(bits []bool, value byte) []bool {

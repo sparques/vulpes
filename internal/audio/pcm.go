@@ -84,6 +84,40 @@ type Playback interface {
 	Close() error
 }
 
+// PlaybackBus serializes complete playback operations that share one device.
+// Callers should construct one bus per physical playback endpoint and share it
+// across every channel routed to that endpoint.
+type PlaybackBus struct {
+	playback Playback
+	permit   chan struct{}
+}
+
+// NewPlaybackBus wraps a playback endpoint for exclusive burst access.
+func NewPlaybackBus(playback Playback) (*PlaybackBus, error) {
+	if playback == nil {
+		return nil, errors.New("audio playback is nil")
+	}
+	return &PlaybackBus{playback: playback, permit: make(chan struct{}, 1)}, nil
+}
+
+// Spec returns the wrapped endpoint's PCM specification.
+func (b *PlaybackBus) Spec() Spec { return b.playback.Spec() }
+
+// WithExclusive runs one complete transmission while excluding other users of
+// this bus. Cancellation also interrupts waiting to acquire the device.
+func (b *PlaybackBus) WithExclusive(ctx context.Context, transmit func(Playback) error) error {
+	if transmit == nil {
+		return errors.New("audio transmit operation is nil")
+	}
+	select {
+	case b.permit <- struct{}{}:
+		defer func() { <-b.permit }()
+		return transmit(b.playback)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // SliceCapture is a deterministic in-memory Capture used by tests and offline
 // pipelines.
 type SliceCapture struct {

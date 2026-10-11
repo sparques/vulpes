@@ -40,6 +40,8 @@ channels:
 # For PSK, set profile to one of P/Q/R/S at 2400 or T/U/V/W at 4800.
 # Defaults are R for 2400 and V for 4800. 2400 variant defaults to V26B;
 # choose V26A for Dire Wolf 1.5 and earlier compatibility.
+# For 9600 G3RUH, optional upsample: 1..4 selects receive polyphase
+# interpolation; omit it (or use 0) for Dire Wolf's sample-rate-based default.
 
 interfaces:
   kiss_tcp:
