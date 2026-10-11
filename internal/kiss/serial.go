@@ -18,6 +18,100 @@ import (
 
 const serialReadTimeout = 200 * time.Millisecond
 
+const serialReconnectDelay = time.Second
+
+type serialOpener func(string, int, []string, map[string]*tnc.Channel, string) (*SerialServer, error)
+
+// ReconnectingSerialServer keeps a configured KISS serial endpoint available
+// across device removal, USB re-enumeration, and transient open failures.
+type ReconnectingSerialServer struct {
+	device, bound string
+	baud          int
+	channelOrder  []string
+	channels      map[string]*tnc.Channel
+	opener        serialOpener
+	retry         time.Duration
+	done          chan struct{}
+	closeOnce     sync.Once
+	mu            sync.RWMutex
+	active        *SerialServer
+}
+
+// NewReconnectingSerialServer validates a configured serial endpoint. The
+// device is opened by Run so startup and later reconnects share one path.
+func NewReconnectingSerialServer(device string, baud int, channelOrder []string, channels map[string]*tnc.Channel, boundChannel string) (*ReconnectingSerialServer, error) {
+	if device == "" || baud <= 0 {
+		return nil, errors.New("KISS serial requires a device and positive baud rate")
+	}
+	if _, err := ChannelPortMap(channelOrder, channels); err != nil {
+		return nil, err
+	}
+	if boundChannel != "" && channels[boundChannel] == nil {
+		return nil, fmt.Errorf("KISS serial is bound to unknown channel %q", boundChannel)
+	}
+	return &ReconnectingSerialServer{
+		device: device, baud: baud, channelOrder: append([]string(nil), channelOrder...), channels: channels,
+		bound: boundChannel, opener: OpenSerialServer, retry: serialReconnectDelay, done: make(chan struct{}),
+	}, nil
+}
+
+// Run polls for the configured device and reconnects whenever it disappears.
+func (s *ReconnectingSerialServer) Run(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-s.done:
+			return nil
+		default:
+		}
+		server, err := s.opener(s.device, s.baud, s.channelOrder, s.channels, s.bound)
+		if err == nil {
+			s.mu.Lock()
+			s.active = server
+			s.mu.Unlock()
+			err = server.Run(ctx)
+			s.mu.Lock()
+			if s.active == server {
+				s.active = nil
+			}
+			s.mu.Unlock()
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-s.done:
+			return nil
+		case <-time.After(s.retry):
+		}
+	}
+}
+
+// Broadcast forwards receive frames to the currently connected device.
+func (s *ReconnectingSerialServer) Broadcast(channelName string, event modem.Event) {
+	s.mu.RLock()
+	active := s.active
+	s.mu.RUnlock()
+	if active != nil {
+		active.Broadcast(channelName, event)
+	}
+}
+
+// Close stops polling and interrupts the current serial connection.
+func (s *ReconnectingSerialServer) Close() error {
+	var closeErr error
+	s.closeOnce.Do(func() {
+		close(s.done)
+		s.mu.RLock()
+		active := s.active
+		s.mu.RUnlock()
+		if active != nil {
+			closeErr = active.Close()
+		}
+	})
+	return closeErr
+}
+
 // SerialServer provides KISS framing on an opened serial-like stream. The
 // server owns and closes the stream after construction.
 type SerialServer struct {

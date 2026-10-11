@@ -27,16 +27,17 @@ const (
 // Server provides the modem-facing subset of the AGWPE TCP protocol. It owns
 // the listener but not the channels.
 type Server struct {
-	listener net.Listener
-	ports    map[uint8]*tnc.Channel
-	names    map[uint8]string
-	queue    int
-	mu       sync.RWMutex
-	clients  map[*client]struct{}
-	closed   bool
-	wg       sync.WaitGroup
-	dropped  atomic.Uint64
-	rejected atomic.Uint64
+	listener     net.Listener
+	ports        map[uint8]*tnc.Channel
+	names        map[uint8]string
+	queue        int
+	mu           sync.RWMutex
+	clients      map[*client]struct{}
+	closed       bool
+	wg           sync.WaitGroup
+	dropped      atomic.Uint64
+	rejected     atomic.Uint64
+	disconnected atomic.Uint64
 }
 
 type client struct {
@@ -53,8 +54,9 @@ type client struct {
 
 // Counters summarizes input rejection and per-client output backpressure.
 type Counters struct {
-	DroppedOutbound uint64
-	RejectedInbound uint64
+	DroppedOutbound   uint64
+	RejectedInbound   uint64
+	ClientDisconnects uint64
 }
 
 // NewServer constructs an AGWPE service. Port numbers are zero based and must
@@ -220,7 +222,7 @@ func formatAddress(address ax25.Address) string {
 }
 
 func (s *Server) Counters() Counters {
-	return Counters{DroppedOutbound: s.dropped.Load(), RejectedInbound: s.rejected.Load()}
+	return Counters{DroppedOutbound: s.dropped.Load(), RejectedInbound: s.rejected.Load(), ClientDisconnects: s.disconnected.Load()}
 }
 
 func (s *Server) Close() error {
@@ -456,6 +458,7 @@ func (c *client) writeLoop() {
 
 func (c *client) close() {
 	c.once.Do(func() {
+		c.server.disconnected.Add(1)
 		close(c.done)
 		_ = c.conn.Close()
 		c.server.mu.Lock()

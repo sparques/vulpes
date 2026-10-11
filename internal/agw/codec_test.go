@@ -42,6 +42,40 @@ func TestCodecFragmentedAndCoalesced(t *testing.T) {
 	}
 }
 
+func TestEncodeGoldenWireVector(t *testing.T) {
+	frame := Frame{Port: 2, Kind: 'K', PID: 0xf0, CallFrom: "N0CALL-1", CallTo: "APRS", User: 0x78563412, Payload: []byte{0, 0xc0, 0xdb}}
+	got, err := Encode(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []byte{
+		2, 0, 0, 0, 'K', 0, 0xf0, 0,
+		'N', '0', 'C', 'A', 'L', 'L', '-', '1', 0, 0,
+		'A', 'P', 'R', 'S', 0, 0, 0, 0, 0, 0,
+		3, 0, 0, 0, 0x12, 0x34, 0x56, 0x78,
+		0, 0xc0, 0xdb,
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("wire = % x, want % x", got, want)
+	}
+}
+
+func TestDecoderAllocationBound(t *testing.T) {
+	wire, err := Encode(Frame{Kind: 'K', Payload: bytes.Repeat([]byte{0x55}, 256)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allocations := testing.AllocsPerRun(100, func() {
+		frames, err := NewDecoder(256).Feed(wire)
+		if err != nil || len(frames) != 1 {
+			panic("decode failed")
+		}
+	})
+	if allocations > 8 {
+		t.Fatalf("decoder allocations = %.1f, want <= 8", allocations)
+	}
+}
+
 func TestDecoderRejectsOversizeBeforePayload(t *testing.T) {
 	header := make([]byte, HeaderSize)
 	binary.LittleEndian.PutUint32(header[28:32], 17)

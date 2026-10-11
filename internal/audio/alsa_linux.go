@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -84,11 +85,24 @@ func hintString(hint unsafe.Pointer, key string) string {
 }
 
 type alsaPCM struct {
-	pcm     *C.snd_pcm_t
-	spec    Spec
-	capture bool
-	mu      sync.Mutex
-	closed  bool
+	pcm       *C.snd_pcm_t
+	spec      Spec
+	capture   bool
+	mu        sync.Mutex
+	closed    bool
+	overruns  atomic.Uint64
+	underruns atomic.Uint64
+}
+
+// ALSAStats counts stream recoveries caused by capture overruns and playback
+// underruns. Callers can type-assert an opened endpoint to this interface.
+type ALSAStats struct {
+	Overruns  uint64
+	Underruns uint64
+}
+
+func (p *alsaPCM) Stats() ALSAStats {
+	return ALSAStats{Overruns: p.overruns.Load(), Underruns: p.underruns.Load()}
 }
 
 // OpenALSACapture opens a nonblocking interleaved S16_LE capture stream.
@@ -163,6 +177,11 @@ func (p *alsaPCM) transfer(ctx context.Context, samples []int16, read bool) (int
 			result = C.snd_pcm_writei(p.pcm, unsafe.Pointer(&samples[0]), frames)
 		}
 		if result < 0 && result != -C.EAGAIN {
+			if p.capture {
+				p.overruns.Add(1)
+			} else {
+				p.underruns.Add(1)
+			}
 			result = C.snd_pcm_sframes_t(C.snd_pcm_recover(p.pcm, C.int(result), 1))
 			recovered = result == 0
 		}

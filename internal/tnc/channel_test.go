@@ -5,6 +5,7 @@ package tnc
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/sparques/vulpes/internal/modem"
@@ -23,6 +24,9 @@ func TestChannelQueueBoundsCopiesAndCloses(t *testing.T) {
 	if err := channel.QueueFrame([]byte{4}); !errors.Is(err, ErrQueueFull) {
 		t.Fatalf("queue overflow = %v, want ErrQueueFull", err)
 	}
+	if metrics := channel.Metrics(); metrics.QueueDepth != 1 || metrics.QueueDrops != 1 {
+		t.Fatalf("metrics = %+v", metrics)
+	}
 	channel.carrier.Store(false)
 	channel.timingMu.Lock()
 	channel.timing.FullDuplex = true
@@ -36,6 +40,53 @@ func TestChannelQueueBoundsCopiesAndCloses(t *testing.T) {
 	}
 	if err := channel.QueueFrame([]byte{1}); !errors.Is(err, ErrClosed) {
 		t.Fatalf("queue after close = %v, want ErrClosed", err)
+	}
+}
+
+func TestChannelConcurrentQueueSubscribersAndShutdown(t *testing.T) {
+	channel := testChannel(t, 8)
+	var workers sync.WaitGroup
+	for worker := 0; worker < 8; worker++ {
+		workers.Add(1)
+		go func(worker int) {
+			defer workers.Done()
+			for sequence := 0; sequence < 100; sequence++ {
+				err := channel.QueueFrame([]byte{byte(worker), byte(sequence)})
+				if err != nil && !errors.Is(err, ErrQueueFull) && !errors.Is(err, ErrClosed) {
+					t.Errorf("QueueFrame: %v", err)
+				}
+				_ = channel.QueueDepth()
+				timing := channel.Timing()
+				timing.Persistence = (worker*100 + sequence) & 255
+				if err := channel.SetTiming(timing); err != nil {
+					t.Errorf("SetTiming: %v", err)
+				}
+			}
+		}(worker)
+	}
+	for worker := 0; worker < 8; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for range 100 {
+				events, unsubscribe, err := channel.SubscribeEvents(1)
+				if err != nil {
+					if !errors.Is(err, ErrClosed) {
+						t.Errorf("SubscribeEvents: %v", err)
+					}
+					return
+				}
+				select {
+				case <-events:
+				default:
+				}
+				unsubscribe()
+			}
+		}()
+	}
+	workers.Wait()
+	if err := channel.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

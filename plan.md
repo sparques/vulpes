@@ -156,7 +156,7 @@ explicit, has a non-cgo stub, and avoids adding a second hardware abstraction.
   AGC/normalization where required, symbol timing PLL, and data slicers.
 - [x] Implement channel routing for mono/stereo PCM and bounded concurrent
   receive/playback pipelines.
-- [ ] Add sample-rate and chunk-boundary invariance tests at supported rates
+- [x] Add sample-rate and chunk-boundary invariance tests at supported rates
   (at minimum 44.1 and 48 kHz; add 22.05 kHz where the mode permits).
 
 Acceptance: synthetic tones and filter response tests meet numeric tolerances;
@@ -203,7 +203,7 @@ recorded clean-signal expectations, and recover after malformed/noisy frames.
 - [x] Test symbol packing independently from waveform generation and recovery.
 - [x] Cross-test each mapping/mode against Dire Wolf-generated WAVs and make
   Dire Wolf decode Vulpes-generated WAVs.
-- [ ] Establish noise/frequency/sample-clock impairment regression thresholds.
+- [x] Establish noise/frequency/sample-clock impairment regression thresholds.
 
 Acceptance: 2400 V.26A, 2400 V.26B, and 4800 V.27 each pass bidirectional clean
 interoperability and their recorded impairment suites.
@@ -218,7 +218,7 @@ interoperability and their recorded impairment suites.
 - [x] Validate polarity inversion and recovery from loss of carrier/state.
 - [x] Cross-test Vulpes and Dire Wolf WAV generation/reception in both
   directions.
-- [ ] Establish clean and impaired regression thresholds, including audio-path
+- [x] Establish clean and impaired regression thresholds, including audio-path
   bandwidth limitations documented for this mode.
 
 Acceptance: 9600 AX.25 frames interoperate with Dire Wolf fixtures at 44.1 and
@@ -235,8 +235,10 @@ interoperability are validated.
 `internal/modem/eas` now uses the Dire Wolf-derived profile-A AFSK detector,
 including the 520.83 bit/s timing correction, and gathers repeated SAME
 `ZCZC`/`NNNN` messages after the 64-bit alternating-bit preamble. Dire Wolf's
-generated `check-modemeas` signal reproduces all three headers and end markers;
-corrupted-signal thresholds and an external AIS audio fixture remain open.
+generated `check-modemeas` signal reproduces all three headers and end markers.
+AIS uses the payload from Dire Wolf's documented type-3 example as an external
+vector and locally generates its GMSK audio so fixture provenance stays exact;
+both modes reject corrupted and truncated transmissions in regression tests.
 
 - [x] Implement AIS GMSK demodulation, training/sync detection, NRZI/HDLC
   framing, de-stuffing, and FCS validation according to the Dire Wolf reference
@@ -248,7 +250,7 @@ corrupted-signal thresholds and an external AIS audio fixture remain open.
   handling.
 - [x] Deliver EAS messages as raw/structured SAME events without alert policy,
   geographic lookup, or APRS conversion.
-- [ ] Validate against Dire Wolf AIS documentation/fixtures and the
+- [x] Validate against Dire Wolf AIS documentation/fixtures and the
   `check-modemeas` signal, plus corrupted and truncated transmissions.
 
 Acceptance: known AIS frames pass FCS and reproduce their payload/NMEA output;
@@ -290,10 +292,10 @@ channel, writes the full burst, and fail-safely unkeys on cancellation/errors.
   behavior: compatible-device discovery, explicit hidraw device selection,
   GPIO 1-8 selection (default GPIO 3), polarity inversion, permission/error
   diagnostics, and the same single-pin output-mask behavior as Dire Wolf.
-- [ ] Add fake-device unit tests for every PTT backend and Linux hardware tests
+- [x] Add fake-device unit tests for every PTT backend and Linux hardware tests
   that skip cleanly when serial, gpiochip, or compatible CM108 hardware is not
   present.
-- [ ] Exercise concurrent receive, multiple clients, queue saturation, client
+- [x] Exercise concurrent receive, multiple clients, queue saturation, client
   disconnects, and shutdown under `go test -race`.
 
 Acceptance: frames from any supported client are queued, carrier arbitration is
@@ -302,15 +304,16 @@ clients without one client stalling another.
 
 ### 8. KISS over TCP and serial
 
-Partial implementation note: `internal/kiss.TCPServer` now supports
+Implementation note: `internal/kiss.TCPServer` supports
 concurrent TCP clients, port-nibble routing, optional listener channel binding,
 bounded per-client outbound queues, frame broadcast, and nonblocking handling
 of inbound data frames. `internal/kiss.SerialServer` now provides the same
 framing/routing with raw 8N1 port opening, bounded output, read timeout, and
 shutdown interruption. TXDELAY, PERSISTENCE, SLOTTIME, TXTAIL, and FULLDUPLEX
 commands now update per-channel timing state atomically, and `TNC:`/`TXBUF:`
-SET_HARDWARE queries reply on the originating connection. Serial reconnect
-behavior and independent-client protocol validation remain open.
+SET_HARDWARE queries reply on the originating connection. Serial devices are
+opened raw 8N1 and reconnect after absence or removal; PTY and external Dire
+Wolf `kissutil` interoperability tests exercise the configured transport.
 
 - [x] Implement streaming KISS FEND/FESC framing and escaping with independent
   parser state per connection.
@@ -320,9 +323,9 @@ behavior and independent-client protocol validation remain open.
 - [x] Implement channel/port nibble routing and enforce payload/channel limits.
 - [x] Implement concurrent TCP KISS clients, optional per-listener channel
   binding, and receive broadcast semantics.
-- [ ] Implement KISS on configured serial devices and PTYs with baud/raw-mode
+- [x] Implement KISS on configured serial devices and PTYs with baud/raw-mode
   setup, reconnect/poll behavior, and clean device removal handling.
-- [ ] Add byte-vector, fragmented-stream, escaping, malformed-frame, TCP
+- [x] Add byte-vector, fragmented-stream, escaping, malformed-frame, TCP
   loopback, and PTY loopback tests.
 - [ ] Interoperate with Dire Wolf `kissutil` and at least one independent KISS
   client.
@@ -331,6 +334,13 @@ Acceptance: TCP and serial clients can independently send and receive arbitrary
 binary AX.25 frames, change timing parameters, reconnect, and coexist.
 
 ### 9. AGWPE over TCP
+
+Implementation note: golden header vectors, fragmented/coalesced decoding,
+malformed-length rejection, allocation bounds, and independent multi-client
+backpressure tests are automated. Connected mode remains blocked on the
+deferred target-client decision: implementing `C`/`v`/`c`, `D`, `d`, and `Y`
+correctly requires an AX.25 link-state machine, retransmission/window policy,
+and a concrete compatibility target rather than a wire-command stub.
 
 - [x] Implement the Dire Wolf-compatible 36-byte little-endian AGW header,
   bounded payload decoding, and fixed-width callsigns.
@@ -380,11 +390,18 @@ identify their source file and field where possible.
 
 ### 11. System verification, documentation, and release
 
+Verification note (2026-10-11): all automated unit and Dire Wolf waveform
+tests, race tests, vet, and builds pass with `GOCACHE=/tmp`. This restricted
+environment denies TCP listener creation, has no configured ALSA loopback or
+radio-control hardware, and exposes `.git` read-only. External TCP client,
+real-device, release-tag, and required per-task commit verification therefore
+remain unchecked rather than being inferred from mocks or clean skips.
+
 - [ ] Build a table-driven end-to-end suite spanning every modem, sample rate,
   channel mapping, audio direction, KISS transport, and AGW transport.
-- [ ] Add deterministic signal impairments and store per-mode thresholds so DSP
+- [x] Add deterministic signal impairments and store per-mode thresholds so DSP
   regressions are measurable rather than subjective.
-- [ ] Add fuzzing, race testing, goroutine/leak checks, parser allocation
+- [x] Add fuzzing, race testing, goroutine/leak checks, parser allocation
   limits, and sustained multi-client soak tests.
 - [ ] Run real ALSA capture/playback tests with loopback cable/device for each
   feasible mode; record hardware, mixer settings, sample format, and results.
@@ -395,7 +412,7 @@ identify their source file and field where possible.
   one independent KISS and AGW client; save exact commands and results.
 - [x] Document installation, permissions, ALSA selection/mixer setup, config,
   every mode, KISS TCP/serial, AGW TCP, PTT, diagnostics, and limitations.
-- [ ] Add graceful error messages and operational counters for audio overruns,
+- [x] Add graceful error messages and operational counters for audio overruns,
   bad FCS, decoder activity, DCD, queue drops, and client failures.
 - [ ] Run final `goimports`, `GOCACHE=/tmp go test ./...`, race tests, vet,
   builds, and all interoperability/regression suites.

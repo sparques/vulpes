@@ -33,8 +33,9 @@ type TCPConfig struct {
 
 // TCPCounters are cumulative transport-level backpressure and input errors.
 type TCPCounters struct {
-	DroppedOutbound uint64
-	RejectedInbound uint64
+	DroppedOutbound   uint64
+	RejectedInbound   uint64
+	ClientDisconnects uint64
 }
 
 // TCPServer serves concurrent KISS/TCP clients on an existing listener.
@@ -49,6 +50,7 @@ type TCPServer struct {
 	closed      bool
 	dropped     atomic.Uint64
 	rejected    atomic.Uint64
+	disconnects atomic.Uint64
 	clientWG    sync.WaitGroup
 }
 
@@ -187,7 +189,7 @@ func (s *TCPServer) Broadcast(channelName string, event modem.Event) {
 
 // Counters reports dropped outbound and rejected inbound frames.
 func (s *TCPServer) Counters() TCPCounters {
-	return TCPCounters{DroppedOutbound: s.dropped.Load(), RejectedInbound: s.rejected.Load()}
+	return TCPCounters{DroppedOutbound: s.dropped.Load(), RejectedInbound: s.rejected.Load(), ClientDisconnects: s.disconnects.Load()}
 }
 
 // Close stops accepting clients and closes every active connection.
@@ -285,6 +287,7 @@ func (c *tcpClient) writeLoop() {
 
 func (c *tcpClient) close() {
 	c.once.Do(func() {
+		c.server.disconnects.Add(1)
 		close(c.done)
 		_ = c.conn.Close()
 		c.server.mu.Lock()

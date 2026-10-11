@@ -62,4 +62,47 @@ func TestDecodeDireWolfCheckModemEAS(t *testing.T) {
 	if headers != 3 || endings != 3 {
 		t.Fatalf("decoded %d headers and %d endings from %d messages", headers, endings, len(messages))
 	}
+
+	file, err = os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wav, err = audio.NewWAVReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var allSamples []int16
+	for {
+		count, readErr := wav.ReadSamples(context.Background(), buffer)
+		allSamples = append(allSamples, buffer[:count]...)
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+	}
+	_ = file.Close()
+	for _, test := range []struct {
+		name    string
+		samples []int16
+	}{
+		{name: "truncated", samples: allSamples[:len(allSamples)/3]},
+		{name: "corrupted", samples: make([]int16, len(allSamples))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			receiver, err := NewReceiver(Config{SampleRate: 48000})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []Message
+			for offset := 0; offset < len(test.samples); offset += 997 {
+				end := min(offset+997, len(test.samples))
+				got = append(got, receiver.Process(test.samples[offset:end])...)
+			}
+			if len(got) >= 6 {
+				t.Fatalf("%s signal unexpectedly reproduced all messages: %d", test.name, len(got))
+			}
+		})
+	}
 }

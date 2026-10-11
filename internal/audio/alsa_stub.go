@@ -15,6 +15,11 @@ type ALSADevice struct {
 	Output      bool
 }
 
+type ALSAStats struct {
+	Overruns  uint64
+	Underruns uint64
+}
+
 func ListALSADevices() ([]ALSADevice, error)          { return nil, errALSAUnavailable }
 func OpenALSACapture(DeviceConfig) (Capture, error)   { return nil, errALSAUnavailable }
 func OpenALSAPlayback(DeviceConfig) (Playback, error) { return nil, errALSAUnavailable }

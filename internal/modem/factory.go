@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/sparques/vulpes/internal/hdlc"
 	"github.com/sparques/vulpes/internal/modem/afsk"
 	"github.com/sparques/vulpes/internal/modem/ais"
 	"github.com/sparques/vulpes/internal/modem/eas"
@@ -85,7 +86,7 @@ func NewReceiver(settings Settings, maximumFrameBytes int) (Receiver, error) {
 					events = append(events, Event{Kind: EventFrame, Payload: frame.Payload, Quality: frame.Quality, CarrierDetected: frame.CarrierDetected})
 				}
 				return events
-			}, carrier: receiver.CarrierDetected, reset: receiver.Reset,
+			}, carrier: receiver.CarrierDetected, reset: receiver.Reset, stats: receiver.Stats,
 		}, nil
 	case "psk2400", "psk4800":
 		mode, err := pskMode(settings)
@@ -104,7 +105,7 @@ func NewReceiver(settings Settings, maximumFrameBytes int) (Receiver, error) {
 					events = append(events, Event{Kind: EventFrame, Payload: frame.Payload, Quality: frame.Quality, CarrierDetected: frame.CarrierDetected})
 				}
 				return events
-			}, carrier: receiver.CarrierDetected, reset: receiver.Reset,
+			}, carrier: receiver.CarrierDetected, reset: receiver.Reset, stats: receiver.Stats,
 		}, nil
 	case "g3ruh9600":
 		receiver, err := g3ruh.NewReceiver(g3ruh.Config{SampleRate: settings.SampleRate, Amplitude: settings.Amplitude, Upsample: settings.Upsample}, maximumFrameBytes)
@@ -119,7 +120,7 @@ func NewReceiver(settings Settings, maximumFrameBytes int) (Receiver, error) {
 					events = append(events, Event{Kind: EventFrame, Payload: frame.Payload, Quality: frame.Quality, CarrierDetected: frame.CarrierDetected})
 				}
 				return events
-			}, carrier: receiver.CarrierDetected, reset: receiver.Reset,
+			}, carrier: receiver.CarrierDetected, reset: receiver.Reset, stats: receiver.Stats,
 		}, nil
 	case "ais":
 		receiver, err := ais.NewReceiver(ais.Config{SampleRate: settings.SampleRate, Upsample: settings.Upsample}, maximumFrameBytes)
@@ -134,7 +135,7 @@ func NewReceiver(settings Settings, maximumFrameBytes int) (Receiver, error) {
 					events = append(events, Event{Kind: EventAIS, Payload: message.Payload, NMEA: message.NMEA, Quality: message.Quality, CarrierDetected: message.CarrierDetected})
 				}
 				return events
-			}, carrier: receiver.CarrierDetected, reset: receiver.Reset,
+			}, carrier: receiver.CarrierDetected, reset: receiver.Reset, stats: receiver.Stats,
 		}, nil
 	case "eas":
 		receiver, err := eas.NewReceiver(eas.Config{SampleRate: settings.SampleRate, Mark: settings.MarkHz, Space: settings.SpaceHz})
@@ -182,11 +183,18 @@ type receiverAdapter struct {
 	process func([]int16) []Event
 	carrier func() bool
 	reset   func()
+	stats   func() hdlc.Stats
 }
 
 func (r receiverAdapter) Process(samples []int16) []Event { return r.process(samples) }
 func (r receiverAdapter) CarrierDetected() bool           { return r.carrier() }
 func (r receiverAdapter) Reset()                          { r.reset() }
+func (r receiverAdapter) Stats() hdlc.Stats {
+	if r.stats == nil {
+		return hdlc.Stats{}
+	}
+	return r.stats()
+}
 
 func afskParameters(settings Settings) (int, float64, float64) {
 	baud, mark, space := 1200, 1200.0, 2200.0

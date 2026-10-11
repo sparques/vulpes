@@ -81,6 +81,19 @@ type Channel struct {
 	carrier           atomic.Bool
 	subscribers       map[chan modem.Event]struct{}
 	droppedEvents     atomic.Uint64
+	audioChunks       atomic.Uint64
+	audioSamples      atomic.Uint64
+	receiveEvents     atomic.Uint64
+	queueDrops        atomic.Uint64
+}
+
+// Metrics is a point-in-time operational snapshot for one channel.
+type Metrics struct {
+	AudioChunks, AudioSamples, ReceiveEvents uint64
+	QueueDepth                               int
+	QueueDrops, DroppedEvents                uint64
+	CarrierDetected                          bool
+	HDLC                                     hdlc.Stats
 }
 
 // NewChannel constructs modem endpoints and defaults an unspecified queue to
@@ -166,7 +179,10 @@ func (c *Channel) ProcessAudio(samples []int16) []modem.Event {
 	case <-c.done:
 		return nil
 	default:
+		c.audioChunks.Add(1)
+		c.audioSamples.Add(uint64(len(samples)))
 		events := c.receiver.Process(samples)
+		c.receiveEvents.Add(uint64(len(events)))
 		c.carrier.Store(c.receiver.CarrierDetected())
 		c.publish(events)
 		return events
@@ -205,6 +221,18 @@ func (c *Channel) SubscribeEvents(queueDepth int) (<-chan modem.Event, func(), e
 // DroppedEvents reports receive events discarded due to subscriber
 // backpressure.
 func (c *Channel) DroppedEvents() uint64 { return c.droppedEvents.Load() }
+
+// Metrics returns counters used for diagnostics without resetting them.
+func (c *Channel) Metrics() Metrics {
+	metrics := Metrics{
+		AudioChunks: c.audioChunks.Load(), AudioSamples: c.audioSamples.Load(), ReceiveEvents: c.receiveEvents.Load(),
+		QueueDepth: c.QueueDepth(), QueueDrops: c.queueDrops.Load(), DroppedEvents: c.droppedEvents.Load(), CarrierDetected: c.carrier.Load(),
+	}
+	if receiver, ok := c.receiver.(interface{ Stats() hdlc.Stats }); ok {
+		metrics.HDLC = receiver.Stats()
+	}
+	return metrics
+}
 
 // QueueDepth reports the number of frames waiting for transmission. It is a
 // snapshot intended for operational metrics and protocol status queries.
@@ -256,6 +284,7 @@ func (c *Channel) QueueFrame(payload []byte) error {
 	case c.queue <- frame:
 		return nil
 	default:
+		c.queueDrops.Add(1)
 		return ErrQueueFull
 	}
 }

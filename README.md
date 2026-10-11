@@ -30,17 +30,16 @@ permissions, hardware acceptance, and deterministic WAV operation.
 
 ## Current limitations
 
-Vulpes is not yet release-ready. The deterministic modem, framing, YAML,
-KISS, AGW raw/query, and PTT backend components are under test, but the CLI
-does not yet connect them to live ALSA capture/playback. AIS and EAS receive
-paths have protocol-level tests but still need reference audio fixtures and
-repeat/error-recovery validation.
+Vulpes is not yet release-ready. The CLI connects configured channels to live
+ALSA or deterministic WAV audio, KISS TCP/serial, AGW raw/query services, and
+PTT backends. Deterministic and Dire Wolf cross-tests cover every modem; real
+audio and GPIO acceptance still requires the documented hardware test host.
 
 The AGWPE service deliberately does not implement the heard-station `H`
 command because Vulpes does not maintain a heard-station database. Connected
-mode commands are also deferred until a target client requires them; raw AX.25
-transmit/monitor and the `R`, `G`, `g`, `X`, `x`, and `y` query/control subset
-are implemented.
+mode commands are not yet implemented because they require an AX.25 link-state
+machine; raw AX.25 transmit/monitor and the `R`, `G`, `g`, `X`, `x`, and `y`
+query/control subset are implemented.
 
 Hardware checks require an explicit test host. A release test record should
 identify the ALSA device and mixer settings, serial adapter, GPIO chip/line,

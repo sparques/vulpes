@@ -3,6 +3,7 @@
 package agw
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -127,6 +128,37 @@ func TestClientCommandsWithoutNetwork(t *testing.T) {
 	server.Broadcast("radio", modem.Event{Kind: modem.EventFrame, Payload: []byte{4, 5}})
 	if reply := <-c.out; reply.Kind != 'K' || string(reply.Payload) != "\x00\x04\x05" {
 		t.Fatalf("bad monitor event: %#v", reply)
+	}
+}
+
+func TestMultipleClientsHaveIndependentMonitoringAndBackpressure(t *testing.T) {
+	channel, err := tnc.NewChannel(tnc.ChannelConfig{
+		Name: "radio", QueueDepth: 4, SlotMillis: 1, Persistence: 255,
+		Modem: modem.Settings{Mode: "afsk1200", SampleRate: 48000, Amplitude: .5, Profile: "A", Slicers: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer channel.Close()
+	server := &Server{ports: map[uint8]*tnc.Channel{0: channel}, names: map[uint8]string{0: "radio"}, clients: make(map[*client]struct{})}
+	monitor := &client{server: server, out: make(chan Frame, 1), done: make(chan struct{}), calls: make(map[string]struct{})}
+	quiet := &client{server: server, out: make(chan Frame, 1), done: make(chan struct{}), calls: make(map[string]struct{})}
+	slow := &client{server: server, out: make(chan Frame, 1), done: make(chan struct{}), calls: make(map[string]struct{})}
+	server.clients[monitor], server.clients[quiet], server.clients[slow] = struct{}{}, struct{}{}, struct{}{}
+	monitor.monitorRaw.Store(true)
+	slow.monitorRaw.Store(true)
+	slow.out <- Frame{Kind: 'R'}
+	server.Broadcast("radio", modem.Event{Kind: modem.EventFrame, Payload: []byte{1, 2, 3}})
+	if frame := <-monitor.out; frame.Kind != 'K' || !bytes.Equal(frame.Payload, []byte{0, 1, 2, 3}) {
+		t.Fatalf("monitor frame = %#v", frame)
+	}
+	select {
+	case frame := <-quiet.out:
+		t.Fatalf("unsubscribed client received %#v", frame)
+	default:
+	}
+	if got := server.Counters().DroppedOutbound; got != 1 {
+		t.Fatalf("dropped outbound = %d, want 1", got)
 	}
 }
 

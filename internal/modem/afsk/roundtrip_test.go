@@ -21,8 +21,10 @@ func TestAFSKHDLCRoundTrip(t *testing.T) {
 	}{
 		{name: "300-44100", sampleRate: 44100, baud: 300, mark: 1600, space: 1800},
 		{name: "300-48000", sampleRate: 48000, baud: 300, mark: 1600, space: 1800},
+		{name: "300-22050", sampleRate: 22050, baud: 300, mark: 1600, space: 1800},
 		{name: "1200-44100", sampleRate: 44100, baud: 1200, mark: 1200, space: 2200},
 		{name: "1200-48000", sampleRate: 48000, baud: 1200, mark: 1200, space: 2200},
+		{name: "1200-22050", sampleRate: 22050, baud: 1200, mark: 1200, space: 2200},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

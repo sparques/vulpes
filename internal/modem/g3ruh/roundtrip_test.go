@@ -4,6 +4,8 @@ package g3ruh
 
 import (
 	"bytes"
+	"math"
+	"math/rand"
 	"strconv"
 	"testing"
 
@@ -50,6 +52,59 @@ func TestRoundTripSampleRatesChunksAndPolarity(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestImpairmentRegressionFloor(t *testing.T) {
+	const sampleRate = 48000
+	payload := []byte("G3RUH deterministic impairment floor")
+	modulator, err := NewModulator(Config{SampleRate: sampleRate, Amplitude: .8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	samples := modulator.Modulate(hdlc.Encode(payload, 160, 40))
+	// Model a bandwidth-limited audio path, 100 ppm sample clock error,
+	// and about 28 dB of uniformly distributed peak noise.
+	for pass := 0; pass < 2; pass++ {
+		filtered := append([]int16(nil), samples...)
+		for i := 1; i+1 < len(samples); i++ {
+			filtered[i] = int16((int(samples[i-1]) + 2*int(samples[i]) + int(samples[i+1])) / 4)
+		}
+		samples = filtered
+	}
+	samples = resampleG3RUH(samples, 1.0001)
+	random := rand.New(rand.NewSource(96))
+	for i := range samples {
+		value := int(samples[i]) + random.Intn(2001) - 1000
+		samples[i] = int16(min(max(value, -32768), 32767))
+	}
+	receiver, err := NewReceiver(Config{SampleRate: sampleRate}, 256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frames []ReceivedFrame
+	for offset := 0; offset < len(samples); {
+		end := min(offset+1+offset%149, len(samples))
+		frames = append(frames, receiver.Process(samples[offset:end])...)
+		offset = end
+	}
+	for _, frame := range frames {
+		if bytes.Equal(frame.Payload, payload) {
+			return
+		}
+	}
+	t.Fatalf("impaired payload not recovered; frames=%d stats=%+v", len(frames), receiver.Stats())
+}
+
+func resampleG3RUH(input []int16, ratio float64) []int16 {
+	output := make([]int16, int(float64(len(input))*ratio))
+	for i := range output {
+		position := float64(i) / ratio
+		left := min(int(position), len(input)-1)
+		right := min(left+1, len(input)-1)
+		fraction := position - float64(left)
+		output[i] = int16(math.Round(float64(input[left])*(1-fraction) + float64(input[right])*fraction))
+	}
+	return output
 }
 
 func TestReceiverResetRecoversAfterSignalLoss(t *testing.T) {

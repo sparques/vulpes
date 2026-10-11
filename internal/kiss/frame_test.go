@@ -50,6 +50,19 @@ func TestDecoderBoundsInput(t *testing.T) {
 	}
 }
 
+func TestDecoderAllocationBound(t *testing.T) {
+	wire := Encode(Frame{Port: 1, Command: DataFrame, Payload: bytes.Repeat([]byte{0x55}, 256)})
+	allocations := testing.AllocsPerRun(100, func() {
+		frames := NewDecoder(257).Feed(wire)
+		if len(frames) != 1 {
+			panic("decode failed")
+		}
+	})
+	if allocations > 10 {
+		t.Fatalf("decoder allocations = %.1f, want <= 10", allocations)
+	}
+}
+
 func FuzzRoundTrip(f *testing.F) {
 	f.Add(byte(0), byte(DataFrame), []byte("vulpes"))
 	f.Add(byte(15), byte(SetHardware), []byte{FEND, FESC})

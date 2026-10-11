@@ -3,8 +3,13 @@
 package ais
 
 import (
+	"bytes"
+	"encoding/hex"
+	"math"
 	"strings"
 	"testing"
+
+	"github.com/sparques/vulpes/internal/hdlc"
 )
 
 func TestPayloadLengths(t *testing.T) {
@@ -23,6 +28,72 @@ func TestPayloadLengths(t *testing.T) {
 			t.Errorf("type %d length %d valid = %v, want %v", test.typ, test.bytes, got, test.valid)
 		}
 	}
+}
+
+func TestReceiverKnownDireWolfDocumentationVector(t *testing.T) {
+	// This payload is the bit-decoded form of the AIS sentence used by Dire
+	// Wolf's AIS documentation/source examples:
+	// !AIVDM,1,1,,A,35NO=dPOiAJriVDH@94E84AJ0000,0*4B
+	payload, err := hex.DecodeString("0c579f36c81fc516bac6651840911520445a000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ToNMEA(payload); got != "!AIVDM,1,1,,A,35NO=dPOiAJriVDH@94E84AJ0000,0*4B" {
+		t.Fatalf("NMEA = %q", got)
+	}
+	levels := hdlc.Encode(payload, 100, 20)
+	samples := modulateAIS(levels, 48000)
+	receiver, err := NewReceiver(Config{SampleRate: 48000}, 256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var messages []Message
+	for offset := 0; offset < len(samples); {
+		end := min(offset+1+offset%197, len(samples))
+		messages = append(messages, receiver.Process(samples[offset:end])...)
+		offset = end
+	}
+	if len(messages) != 1 || !bytes.Equal(messages[0].Payload, payload) {
+		t.Fatalf("messages = %#v, stats=%+v", messages, receiver.Stats())
+	}
+
+	corrupted := append([]bool(nil), levels...)
+	corrupted[100*8+24] = !corrupted[100*8+24]
+	receiver.Reset()
+	if got := receiver.Process(modulateAIS(corrupted, 48000)); len(got) != 0 {
+		t.Fatalf("corrupt frame produced %d messages", len(got))
+	}
+	receiver.Reset()
+	truncated := samples[:len(samples)/2]
+	if got := receiver.Process(truncated); len(got) != 0 {
+		t.Fatalf("truncated frame produced %d messages", len(got))
+	}
+}
+
+func modulateAIS(levels []bool, sampleRate int) []int16 {
+	const bitRate = 9600
+	phaseStep := uint32(math.Round(math.Ldexp(1, 32) * float64(bitRate/2) / float64(sampleRate)))
+	var phase uint32
+	var previous bool
+	var emitted int64
+	output := make([]int16, 0, len(levels)*sampleRate/bitRate+1)
+	for bit, level := range levels {
+		target := (int64(bit+1)*int64(sampleRate) + bitRate - 1) / bitRate
+		for range target - emitted {
+			if level != previous {
+				phase += phaseStep
+			} else if phase&0x80000000 != 0 {
+				phase = 0xc0000000
+			} else {
+				phase = 0x40000000
+			}
+			angle := float64(phase>>24) * 2 * math.Pi / 256
+			output = append(output, int16(math.Round(math.Sin(angle)*.8*32767)))
+		}
+		emitted = target
+		previous = level
+	}
+	return output
 }
 
 func TestToNMEAArmorAndChecksum(t *testing.T) {
