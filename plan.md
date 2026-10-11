@@ -327,7 +327,7 @@ Wolf `kissutil` interoperability tests exercise the configured transport.
   setup, reconnect/poll behavior, and clean device removal handling.
 - [x] Add byte-vector, fragmented-stream, escaping, malformed-frame, TCP
   loopback, and PTY loopback tests.
-- [ ] Interoperate with Dire Wolf `kissutil` and at least one independent KISS
+- [x] Interoperate with Dire Wolf `kissutil` and at least one independent KISS
   client.
 
 Acceptance: TCP and serial clients can independently send and receive arbitrary
