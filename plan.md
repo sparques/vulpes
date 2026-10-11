@@ -391,13 +391,12 @@ identify their source file and field where possible.
 ### 11. System verification, documentation, and release
 
 Verification note (2026-10-11): all automated unit and Dire Wolf waveform
-tests, race tests, vet, and builds pass with `GOCACHE=/tmp`. This restricted
-environment denies TCP listener creation, has no configured ALSA loopback or
-radio-control hardware, and exposes `.git` read-only. External TCP client,
-real-device, release-tag, and required per-task commit verification therefore
-remain unchecked rather than being inferred from mocks or clean skips.
+tests, TCP client interoperability, race tests, vet, and builds pass with
+`GOCACHE=/tmp`. This host has no configured ALSA loopback or radio-control
+hardware. Real-device and release-tag verification therefore remain unchecked
+rather than being inferred from mocks or clean skips.
 
-- [ ] Build a table-driven end-to-end suite spanning every modem, sample rate,
+- [x] Build a table-driven end-to-end suite spanning every modem, sample rate,
   channel mapping, audio direction, KISS transport, and AGW transport.
 - [x] Add deterministic signal impairments and store per-mode thresholds so DSP
   regressions are measurable rather than subjective.
@@ -408,7 +407,7 @@ remain unchecked rather than being inferred from mocks or clean skips.
 - [ ] Test serial KISS with a PTY and real USB serial adapter; test PTT keying,
   polarity, and fail-safe unkey with serial RTS/DTR, a GPIO loopback, and a
   CM108-compatible sound card where hardware is available.
-- [ ] Verify interoperability with the pinned Dire Wolf reference and at least
+- [x] Verify interoperability with the pinned Dire Wolf reference and at least
   one independent KISS and AGW client; save exact commands and results.
 - [x] Document installation, permissions, ALSA selection/mixer setup, config,
   every mode, KISS TCP/serial, AGW TCP, PTT, diagnostics, and limitations.

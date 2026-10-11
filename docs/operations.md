@@ -25,6 +25,24 @@ with acknowledgement, retry-limit, and orderly disconnect handling. The
 heard-list command remains deliberately unsupported because Vulpes has no
 heard-station database.
 
+## Recorded interoperability verification
+
+On 2026-10-11, using the pinned Dire Wolf checkout/build recorded in the
+repository, the complete automated interoperability set passed with:
+
+```sh
+GOCACHE=/tmp go test ./...
+GOCACHE=/tmp go test -race ./...
+```
+
+The run exercised Dire Wolf `gen_packets`, `atest`, `kissutil`, and
+`check-modemeas` integration where applicable. The independent wire clients
+are the raw-socket KISS test and the standalone Python AGW client in the test
+suite. The table-driven system matrix additionally sends each packet mode at
+44.1 and 48 kHz through KISS or AGW input, stereo playback routing, stereo
+capture routing, and modem decode. These automated results do not replace the
+hardware acceptance record described below.
+
 For hardware acceptance, record the kernel, ALSA device and mixer settings,
 adapter identities, configuration, and exact command. Verify capture and
 playback at 44.1 and 48 kHz, serial reconnect/removal, both PTT polarities, and
