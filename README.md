@@ -31,15 +31,15 @@ permissions, hardware acceptance, and deterministic WAV operation.
 ## Current limitations
 
 Vulpes is not yet release-ready. The CLI connects configured channels to live
-ALSA or deterministic WAV audio, KISS TCP/serial, AGW raw/query services, and
+ALSA or deterministic WAV audio, KISS TCP/serial, AGW services, and
 PTT backends. Deterministic and Dire Wolf cross-tests cover every modem; real
 audio and GPIO acceptance still requires the documented hardware test host.
 
-The AGWPE service deliberately does not implement the heard-station `H`
-command because Vulpes does not maintain a heard-station database. Connected
-mode commands are not yet implemented because they require an AX.25 link-state
-machine; raw AX.25 transmit/monitor and the `R`, `G`, `g`, `X`, `x`, and `y`
-query/control subset are implemented.
+The AGWPE service implements raw and monitor traffic, unproto transmission,
+queries, callsign registration, and modulo-8 connected mode with a one-frame
+window, acknowledgement, retransmission, and disconnect handling. It
+deliberately does not implement the heard-station `H` command because Vulpes
+does not maintain a heard-station database.
 
 Hardware checks require an explicit test host. A release test record should
 identify the ALSA device and mixer settings, serial adapter, GPIO chip/line,

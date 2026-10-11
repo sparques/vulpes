@@ -337,10 +337,10 @@ binary AX.25 frames, change timing parameters, reconnect, and coexist.
 
 Implementation note: golden header vectors, fragmented/coalesced decoding,
 malformed-length rejection, allocation bounds, and independent multi-client
-backpressure tests are automated. Connected mode remains blocked on the
-deferred target-client decision: implementing `C`/`v`/`c`, `D`, `d`, and `Y`
-correctly requires an AX.25 link-state machine, retransmission/window policy,
-and a concrete compatibility target rather than a wire-command stub.
+backpressure tests are automated. Connected mode targets Dire Wolf's AGW
+semantics and implements a conservative modulo-8, one-frame-window AX.25 link
+state machine with acknowledgements, bounded pending data, retransmission,
+retry limits, incoming registered calls, connect-via paths, and disconnects.
 
 - [x] Implement the Dire Wolf-compatible 36-byte little-endian AGW header,
   bounded payload decoding, and fixed-width callsigns.
@@ -349,12 +349,12 @@ and a concrete compatibility target rather than a wire-command stub.
   port capabilities, `X`/`x` callsign registration, and `y` queue depth.
 - [x] Implement raw frame receive/transmit `k`/`K`, monitor enable/output
   `m` plus `U`/`I`/`S`/`T`, and unproto transmit `M`/`V`.
-- [ ] Implement connected-mode commands/events `C`/`v`/`c`, `D`, `d`, and `Y`
+- [x] Implement connected-mode commands/events `C`/`v`/`c`, `D`, `d`, and `Y`
   only to the extent required for Dire Wolf AGW modem compatibility; keep this
   isolated from and do not expand it into APRS/application behavior.
 - [x] Document deliberately unsupported commands such as heard-list `H` when
   their backing excluded feature would violate scope.
-- [ ] Add golden wire vectors, fragmentation/coalescing tests, malformed length
+- [x] Add golden wire vectors, fragmentation/coalescing tests, malformed length
   tests, multiple-client tests, and Dire Wolf/independent-client interop tests.
 
 Acceptance: common AGW clients can enumerate ports, monitor frames, and send raw
@@ -448,8 +448,9 @@ the reference supports transmission.
   reimplementation.
 - ALSA and serial dependency versions after proof-of-concept tests; pin
   `github.com/warthog618/go-gpiocdev` with the other selected dependencies.
-- Whether connected-mode AGW support is required by target clients; the raw,
-  monitor, and unproto portions remain required regardless.
+- Connected-mode AGW support is required for Dire Wolf modem compatibility;
+  Vulpes targets the standard modulo-8 command/event behavior with a
+  conservative one-frame transmit window.
 - Exact number of simultaneous audio devices/channels and supported PCM sample
   formats for the first release.
 - Schema-version migration policy and whether a schema document should be

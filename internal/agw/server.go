@@ -50,6 +50,7 @@ type client struct {
 	monitor    atomic.Bool
 	mu         sync.Mutex
 	calls      map[string]struct{}
+	links      map[linkKey]*linkState
 }
 
 // Counters summarizes input rejection and per-client output backpressure.
@@ -102,7 +103,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			}
 			break
 		}
-		c := &client{server: s, conn: connection, out: make(chan Frame, s.queue), done: make(chan struct{}), calls: make(map[string]struct{})}
+		c := &client{server: s, conn: connection, out: make(chan Frame, s.queue), done: make(chan struct{}), calls: make(map[string]struct{}), links: make(map[linkKey]*linkState)}
 		s.mu.Lock()
 		if s.closed {
 			s.mu.Unlock()
@@ -142,10 +143,14 @@ func (s *Server) Broadcast(channelName string, event modem.Event) {
 	payload[0] = port << 4
 	copy(payload[1:], event.Payload)
 	frame := Frame{Port: port, Kind: 'K', Payload: payload}
+	packet, packetOK := ax25.Parse(event.Payload)
 	monitorFrame, monitorOK := makeMonitorFrame(port, event.Payload, false)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for c := range s.clients {
+		if packetOK == nil {
+			c.receiveConnected(port, packet)
+		}
 		if c.monitorRaw.Load() {
 			s.queueClient(c, frame)
 		}
@@ -257,6 +262,20 @@ func (c *client) serve() {
 	defer c.server.wg.Done()
 	written := make(chan struct{})
 	go func() { defer close(written); c.writeLoop() }()
+	linkDone := make(chan struct{})
+	go func() {
+		defer close(linkDone)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.done:
+				return
+			case now := <-ticker.C:
+				c.serviceLinks(now)
+			}
+		}
+	}()
 	decoder := NewDecoder(defaultMaximumPayload)
 	buffer := make([]byte, 4096)
 	for {
@@ -279,6 +298,7 @@ func (c *client) serve() {
 	}
 	c.close()
 	<-written
+	<-linkDone
 }
 
 func (c *client) handle(frame Frame) bool {
@@ -356,6 +376,14 @@ func (c *client) handle(frame Frame) bool {
 		}
 		packet, err := unprotoFrame(frame)
 		return err == nil && channel.QueueFrame(packet) == nil
+	case 'C', 'v', 'c':
+		return c.connect(frame)
+	case 'D':
+		return c.sendConnected(frame)
+	case 'd':
+		return c.disconnectLink(frame)
+	case 'Y':
+		return c.outstanding(frame)
 	default:
 		return false
 	}

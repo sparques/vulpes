@@ -83,3 +83,9 @@ When Dire Wolf's `kissutil` is installed, the KISS integration suite launches
 it as an external TCP client, verifies the `TNC:` hardware-query response, and
 queues a TNC2-formatted AX.25 frame through Vulpes. The transport tests also
 exercise a minimal raw-socket client independently of Vulpes's KISS parser.
+
+The AGW suite checks headers against the pinned Dire Wolf 36-byte layout and
+runs a standalone Python socket client which independently packs and parses
+version, port-list, registration, and queue-depth exchanges. Scripted AX.25
+loopback tests cover outgoing and incoming connect, connected data, per-link
+outstanding counts, acknowledgement, connect-via validation, and disconnect.

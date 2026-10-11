@@ -19,9 +19,11 @@ KISS/TCP and AGWPE listeners bind to the configured addresses. KISS serial is
 raw 8N1 and polls until an absent or removed device is available again.
 Received AX.25 frames are broadcast through bounded client queues, so
 a slow client cannot stall a decoder. AGW supports enumeration, registration,
-queue depth, raw frames, monitor frames, and unproto transmit. Connected mode
-and heard-list commands are deliberately unsupported because Vulpes has no
-connected-mode link state or heard-station database.
+queue depth, raw frames, monitor frames, unproto transmit, and modulo-8
+connected-mode sessions. Connected mode uses a conservative one-frame window
+with acknowledgement, retry-limit, and orderly disconnect handling. The
+heard-list command remains deliberately unsupported because Vulpes has no
+heard-station database.
 
 For hardware acceptance, record the kernel, ALSA device and mixer settings,
 adapter identities, configuration, and exact command. Verify capture and
