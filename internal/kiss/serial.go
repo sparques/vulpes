@@ -181,8 +181,17 @@ func (s *SerialServer) handle(frame Frame) {
 	if channel == nil {
 		channel = s.ports[frame.Port]
 	}
-	if !applyFrame(frame, channel) {
+	response, ok := applyFrame(frame, channel)
+	if !ok {
 		s.rejected.Add(1)
+		return
+	}
+	if response != nil {
+		select {
+		case s.out <- Encode(*response):
+		default:
+			s.dropped.Add(1)
+		}
 	}
 }
 

@@ -4,9 +4,27 @@ package config
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
+
+func TestShippedExamples(t *testing.T) {
+	for _, name := range []string{"vulpes.yaml", "all-modes.yaml"} {
+		file, err := os.Open("../../examples/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, decodeErr := Decode(name, file)
+		closeErr := file.Close()
+		if decodeErr != nil {
+			t.Errorf("%s: %v", name, decodeErr)
+		}
+		if closeErr != nil {
+			t.Error(closeErr)
+		}
+	}
+}
 
 const minimalConfig = `
 version: 1

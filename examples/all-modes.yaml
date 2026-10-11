@@ -1,0 +1,24 @@
+version: 1
+logging:
+  level: info
+audio:
+  - name: radio
+    capture: default
+    playback: default
+    sample_rate: 48000
+    channels: 1
+    buffer_ms: 100
+channels:
+  - {name: afsk300, audio: radio, modem: {mode: afsk300, profile: A, slicers: 9}}
+  - {name: afsk1200, audio: radio, modem: {mode: afsk1200, profile: B, slicers: 9}}
+  - {name: v26a, audio: radio, modem: {mode: psk2400, profile: R, variant: V26A}}
+  - {name: v26b, audio: radio, modem: {mode: psk2400, profile: R, variant: V26B}}
+  - {name: v27, audio: radio, modem: {mode: psk4800, profile: V}}
+  - {name: g3ruh, audio: radio, modem: {mode: g3ruh9600}}
+  - {name: ais, audio: radio, modem: {mode: ais}}
+  - {name: eas, audio: radio, modem: {mode: eas}}
+interfaces:
+  kiss_tcp:
+    - {listen: "127.0.0.1:8001"}
+  agw_tcp:
+    - {listen: "127.0.0.1:8000"}

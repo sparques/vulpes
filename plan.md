@@ -140,17 +140,21 @@ with Dire Wolf.
 
 ### 2. Audio and DSP infrastructure
 
+Implementation note: a small cgo binding to the stable ALSA PCM API was chosen
+over a third-party wrapper. It keeps the negotiated format and recovery behavior
+explicit, has a non-cgo stub, and avoids adding a second hardware abstraction.
+
 - [x] Define capture/playback interfaces around interleaved signed PCM and
   explicit sample rate, channel count, sample format, and buffer duration.
 - [x] Implement WAV input/output and in-memory audio backends before hardware
   access so every modem test is deterministic.
-- [ ] Probe and select the Go ALSA package; implement capture/playback, device
+- [x] Probe and select the Go ALSA package; implement capture/playback, device
   enumeration/opening, negotiated parameter validation, underrun/overrun
   recovery, and clean shutdown.
-- [ ] Implement reusable DSP primitives needed by the reference algorithms:
+- [x] Implement reusable DSP primitives needed by the reference algorithms:
   oscillators, FIR design/application, windowing, low/high/band-pass filters,
   AGC/normalization where required, symbol timing PLL, and data slicers.
-- [ ] Implement channel routing for mono/stereo PCM and bounded concurrent
+- [x] Implement channel routing for mono/stereo PCM and bounded concurrent
   receive/playback pipelines.
 - [ ] Add sample-rate and chunk-boundary invariance tests at supported rates
   (at minimum 44.1 and 48 kHz; add 22.05 kHz where the mode permits).
@@ -211,8 +215,8 @@ interoperability and their recorded impairment suites.
 - [x] Implement Dire Wolf's cosine-window receive filter, polyphase
   upsampling, AGC, transition-interpolating clock recovery, slicing,
   descrambling, and DCD.
-- [ ] Validate polarity inversion and recovery from loss of carrier/state.
-- [ ] Cross-test Vulpes and Dire Wolf WAV generation/reception in both
+- [x] Validate polarity inversion and recovery from loss of carrier/state.
+- [x] Cross-test Vulpes and Dire Wolf WAV generation/reception in both
   directions.
 - [ ] Establish clean and impaired regression thresholds, including audio-path
   bandwidth limitations documented for this mode.
@@ -229,19 +233,20 @@ checks AIS payload lengths after HDLC/FCS recovery, and creates armored
 interoperability are validated.
 
 `internal/modem/eas` now uses the Dire Wolf-derived profile-A AFSK detector,
-including the 520.83 bit/s timing correction, and gathers SAME `ZCZC`/`NNNN`
-messages after the 64-bit alternating-bit preamble. Validation and repeated
-message handling remain open.
+including the 520.83 bit/s timing correction, and gathers repeated SAME
+`ZCZC`/`NNNN` messages after the 64-bit alternating-bit preamble. Dire Wolf's
+generated `check-modemeas` signal reproduces all three headers and end markers;
+corrupted-signal thresholds and an external AIS audio fixture remain open.
 
-- [ ] Implement AIS GMSK demodulation, training/sync detection, NRZI/HDLC
+- [x] Implement AIS GMSK demodulation, training/sync detection, NRZI/HDLC
   framing, de-stuffing, and FCS validation according to the Dire Wolf reference
   and AIS framing rules.
-- [ ] Preserve raw AIS payloads and produce validated `!AIVDM`/`!AIVDO`-style
+- [x] Preserve raw AIS payloads and produce validated `!AIVDM`/`!AIVDO`-style
   output without converting positions into APRS objects.
-- [ ] Implement EAS SAME AFSK demodulation, preamble/sync detection, repeated
+- [x] Implement EAS SAME AFSK demodulation, preamble/sync detection, repeated
   header/end-marker gathering, character decoding, and confidence/error
   handling.
-- [ ] Deliver EAS messages as raw/structured SAME events without alert policy,
+- [x] Deliver EAS messages as raw/structured SAME events without alert policy,
   geographic lookup, or APRS conversion.
 - [ ] Validate against Dire Wolf AIS documentation/fixtures and the
   `check-modemeas` signal, plus corrupted and truncated transmissions.
@@ -258,11 +263,11 @@ emits received modem events through bounded subscriber queues, and provides
 bounded frame queues and on-demand PCM encoding. Transmit dequeue now uses DCD-aware 10 ms carrier polling,
 SLOTTIME intervals, the Dire Wolf `random <= persistence` decision, and
 full-duplex bypass, with cancellation and a 60-second acquisition timeout.
-The CLI/audio pipelines and KISS/AGW application wiring are still pending. A channel transmit operation now keys
+The CLI now owns ALSA/WAV pipelines and KISS/AGW application lifecycle. A channel transmit operation now keys
 PTT after CSMA grants access, routes mono output to the configured stereo
 channel, writes the full burst, and fail-safely unkeys on cancellation/errors.
 
-- [ ] Implement channel configuration, lifecycle, frame event fan-out, metrics,
+- [x] Implement channel configuration, lifecycle, frame event fan-out, metrics,
   backpressure policy, and graceful shutdown.
 - [x] Implement bounded per-channel transmit queues and serialized access to a
   shared stereo playback device using a shared `audio.PlaybackBus` per endpoint.
@@ -303,13 +308,13 @@ bounded per-client outbound queues, frame broadcast, and nonblocking handling
 of inbound data frames. `internal/kiss.SerialServer` now provides the same
 framing/routing with raw 8N1 port opening, bounded output, read timeout, and
 shutdown interruption. TXDELAY, PERSISTENCE, SLOTTIME, TXTAIL, and FULLDUPLEX
-commands now update per-channel timing state atomically. SET_HARDWARE, reconnect
-behavior, applying persistence/slot timing in CSMA, and protocol interoperability
-validation remain open.
+commands now update per-channel timing state atomically, and `TNC:`/`TXBUF:`
+SET_HARDWARE queries reply on the originating connection. Serial reconnect
+behavior and independent-client protocol validation remain open.
 
 - [x] Implement streaming KISS FEND/FESC framing and escaping with independent
   parser state per connection.
-- [ ] Support data, TXDELAY, PERSISTENCE, SLOTTIME, TXTAIL, FULLDUPLEX, and the
+- [x] Support data, TXDELAY, PERSISTENCE, SLOTTIME, TXTAIL, FULLDUPLEX, and the
   useful Dire Wolf SET_HARDWARE queries/commands; reject unsupported commands
   safely.
 - [x] Implement channel/port nibble routing and enforce payload/channel limits.
@@ -332,12 +337,12 @@ binary AX.25 frames, change timing parameters, reconnect, and coexist.
 - [x] Add safe per-client connection state and graceful TCP shutdown.
 - [x] Implement core query/control messages: `R` version, `G` port list, `g`
   port capabilities, `X`/`x` callsign registration, and `y` queue depth.
-- [ ] Implement raw frame receive/transmit `k`/`K`, monitor enable/output
+- [x] Implement raw frame receive/transmit `k`/`K`, monitor enable/output
   `m` plus `U`/`I`/`S`/`T`, and unproto transmit `M`/`V`.
 - [ ] Implement connected-mode commands/events `C`/`v`/`c`, `D`, `d`, and `Y`
   only to the extent required for Dire Wolf AGW modem compatibility; keep this
   isolated from and do not expand it into APRS/application behavior.
-- [ ] Document deliberately unsupported commands such as heard-list `H` when
+- [x] Document deliberately unsupported commands such as heard-list `H` when
   their backing excluded feature would violate scope.
 - [ ] Add golden wire vectors, fragmentation/coalescing tests, malformed length
   tests, multiple-client tests, and Dire Wolf/independent-client interop tests.
@@ -357,16 +362,16 @@ tests; malformed clients cannot affect modem operation.
 - [x] Cover audio device/rate/channel settings, modem modes and profiles, audio
   levels, KISS TCP/serial, AGW TCP, logging, transmit timing, and PTT in the
   YAML schema.
-- [ ] Add CLI flags for config path, audio device overrides, mode/rate, debug
+- [x] Add CLI flags for config path, audio device overrides, mode/rate, debug
   categories, log file, version, and deterministic WAV input/output operation.
 - [x] Configure structured logging with `log/slog`, defaulting to stdout; when
   a log file is configured, open it safely, report setup failures clearly, and
   flush/close it during graceful shutdown.
 - [x] Add configuration golden tests for valid YAML, defaults, malformed YAML,
   duplicate/unknown fields, conflicts, invalid ranges, and excluded features.
-- [ ] Write a documented minimal YAML configuration and examples for every
+- [x] Write a documented minimal YAML configuration and examples for every
   supported mode and interface.
-- [ ] Document how relevant modem-only Dire Wolf directives map to Vulpes YAML;
+- [x] Document how relevant modem-only Dire Wolf directives map to Vulpes YAML;
   do not implement a second Dire Wolf configuration parser.
 
 Acceptance: all supported behavior can be expressed in YAML, modem-only Dire
@@ -388,7 +393,7 @@ identify their source file and field where possible.
   CM108-compatible sound card where hardware is available.
 - [ ] Verify interoperability with the pinned Dire Wolf reference and at least
   one independent KISS and AGW client; save exact commands and results.
-- [ ] Document installation, permissions, ALSA selection/mixer setup, config,
+- [x] Document installation, permissions, ALSA selection/mixer setup, config,
   every mode, KISS TCP/serial, AGW TCP, PTT, diagnostics, and limitations.
 - [ ] Add graceful error messages and operational counters for audio overruns,
   bad FCS, decoder activity, DCD, queue drops, and client failures.

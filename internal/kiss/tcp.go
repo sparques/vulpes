@@ -219,14 +219,16 @@ func (s *TCPServer) isClosed() bool {
 	return s.closed
 }
 
-func (s *TCPServer) handle(frame Frame) {
+func (s *TCPServer) handle(frame Frame) (*Frame, bool) {
 	channel := s.bound
 	if channel == nil {
 		channel = s.ports[frame.Port]
 	}
-	if !applyFrame(frame, channel) {
+	response, ok := applyFrame(frame, channel)
+	if !ok {
 		s.rejected.Add(1)
 	}
+	return response, ok
 }
 
 func (c *tcpClient) serve() {
@@ -242,7 +244,13 @@ func (c *tcpClient) serve() {
 		count, err := c.conn.Read(buffer)
 		if count > 0 {
 			for _, frame := range decoder.Feed(buffer[:count]) {
-				c.server.handle(frame)
+				if response, ok := c.server.handle(frame); ok && response != nil {
+					select {
+					case c.out <- Encode(*response):
+					default:
+						c.server.dropped.Add(1)
+					}
+				}
 			}
 		}
 		if err != nil {

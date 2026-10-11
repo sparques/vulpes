@@ -145,10 +145,6 @@ func (d *decoder) feed(bit bool) (string, bool) {
 			d.gathering = false
 			return string(d.frame), true
 		}
-	} else if d.plussign {
-		// The terminator is three consecutive dashes. Earlier fields contain
-		// dashes too, so a non-dash must restart the terminator count.
-		d.dashesAfterPlus = 0
 	}
 	return "", false
 }

@@ -24,6 +24,10 @@ make build
 
 Go files are formatted with `goimports`.
 
+See [configuration and Dire Wolf migration](docs/configuration.md) and the
+[build and operations guide](docs/operations.md) for live audio, transports,
+permissions, hardware acceptance, and deterministic WAV operation.
+
 ## Current limitations
 
 Vulpes is not yet release-ready. The deterministic modem, framing, YAML,
