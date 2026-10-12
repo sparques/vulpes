@@ -396,13 +396,21 @@ tests, TCP client interoperability, race tests, vet, and builds pass with
 hardware. Real-device and release-tag verification therefore remain unchecked
 rather than being inferred from mocks or clean skips.
 
+Hardware update (2026-10-12): a C-Media `0d8c:013c` CM108-compatible USB PnP
+sound device appeared as ALSA card 3 and `/dev/hidraw3`. Its native formats
+are S16_LE mono capture and S16_LE stereo playback at 44.1/48 kHz. The real
+Vulpes AFSK1200 audio loopback recovered the exact queued payload at both
+rates. The opt-in CM108 HID GPIO 3 active-high key/unkey smoke test also passed.
+Mixer state was left unchanged: speaker playback on (99/151), mic capture on
+(16/16), automatic gain control on. CM108 PTT active-low hardware, other modem
+modes, and extended soak remain unverified.
+
 Final gate detail: `goimports` completed without further changes; unit and
 integration tests, race tests, vet, and builds passed. Dire Wolf
 `gen_packets`, `atest`, `kissutil`, and EAS interoperability tests ran and
-passed. Only the explicitly hardware-gated serial, GPIO, and CM108 tests
-skipped. The host exposes onboard ALSA capture/playback but no loopback cable,
-no USB serial device, root-only `/dev/gpiochip0`, and no CM108-family USB
-device, so those physical acceptance records cannot be produced here.
+passed. Serial and GPIO hardware tests skipped. The CM108 PTT smoke test and
+44.1/48 kHz AFSK1200 audio loopback passed on the attached device; other
+physical modem modes and broader soak tests remain outstanding.
 
 - [x] Build a table-driven end-to-end suite spanning every modem, sample rate,
   channel mapping, audio direction, KISS transport, and AGW transport.
@@ -412,9 +420,12 @@ device, so those physical acceptance records cannot be produced here.
   limits, and sustained multi-client soak tests.
 - [ ] Run real ALSA capture/playback tests with loopback cable/device for each
   feasible mode; record hardware, mixer settings, sample format, and results.
+  Partial: CM108 S16_LE AFSK1200 mono-capture/stereo-playback passed at 44.1
+  and 48 kHz; see the hardware update above.
 - [ ] Test serial KISS with a PTY and real USB serial adapter; test PTT keying,
   polarity, and fail-safe unkey with serial RTS/DTR, a GPIO loopback, and a
-  CM108-compatible sound card where hardware is available.
+  CM108-compatible sound card where hardware is available. Partial: CM108 HID
+  GPIO 3 active-high key/unkey passed; opposite polarity remains mock-tested.
 - [x] Verify interoperability with the pinned Dire Wolf reference and at least
   one independent KISS and AGW client; save exact commands and results.
 - [x] Document installation, permissions, ALSA selection/mixer setup, config,

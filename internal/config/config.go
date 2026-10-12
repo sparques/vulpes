@@ -38,12 +38,14 @@ func (l Logging) SlogLevel() slog.Level {
 }
 
 type Audio struct {
-	Name         string `yaml:"name"`
-	Capture      string `yaml:"capture"`
-	Playback     string `yaml:"playback"`
-	SampleRate   int    `yaml:"sample_rate,omitempty"`
-	Channels     int    `yaml:"channels,omitempty"`
-	BufferMillis int    `yaml:"buffer_ms,omitempty"`
+	Name             string `yaml:"name"`
+	Capture          string `yaml:"capture"`
+	Playback         string `yaml:"playback"`
+	SampleRate       int    `yaml:"sample_rate,omitempty"`
+	Channels         int    `yaml:"channels,omitempty"`
+	CaptureChannels  int    `yaml:"capture_channels,omitempty"`
+	PlaybackChannels int    `yaml:"playback_channels,omitempty"`
+	BufferMillis     int    `yaml:"buffer_ms,omitempty"`
 }
 
 type Channel struct {
@@ -152,6 +154,12 @@ func (c *Config) applyDefaults() {
 		if c.Audio[i].Channels == 0 {
 			c.Audio[i].Channels = 1
 		}
+		if c.Audio[i].CaptureChannels == 0 {
+			c.Audio[i].CaptureChannels = c.Audio[i].Channels
+		}
+		if c.Audio[i].PlaybackChannels == 0 {
+			c.Audio[i].PlaybackChannels = c.Audio[i].Channels
+		}
 		if c.Audio[i].BufferMillis == 0 {
 			c.Audio[i].BufferMillis = 100
 		}
@@ -240,7 +248,11 @@ func (c Config) Validate() error {
 		if _, exists := audio[device.Name]; exists {
 			return fmt.Errorf("%s: duplicate name %q", path, device.Name)
 		}
-		if device.SampleRate < 8000 || device.SampleRate > 192000 || device.Channels < 1 || device.Channels > 2 || device.BufferMillis < 1 || device.BufferMillis > 5000 {
+		if device.SampleRate < 8000 || device.SampleRate > 192000 ||
+			device.Channels < 1 || device.Channels > 2 ||
+			device.CaptureChannels < 1 || device.CaptureChannels > 2 ||
+			device.PlaybackChannels < 1 || device.PlaybackChannels > 2 ||
+			device.BufferMillis < 1 || device.BufferMillis > 5000 {
 			return fmt.Errorf("%s: invalid PCM or buffer settings", path)
 		}
 		audio[device.Name] = device
@@ -259,8 +271,8 @@ func (c Config) Validate() error {
 			return fmt.Errorf("%s: duplicate name %q", path, channel.Name)
 		}
 		channels[channel.Name] = struct{}{}
-		if channel.AudioChannel < 0 || channel.AudioChannel >= device.Channels {
-			return fmt.Errorf("%s: audio_channel %d is unavailable on %q", path, channel.AudioChannel, channel.Audio)
+		if channel.AudioChannel < 0 || channel.AudioChannel >= device.CaptureChannels || channel.AudioChannel >= device.PlaybackChannels {
+			return fmt.Errorf("%s: audio_channel %d is unavailable on both capture and playback for %q", path, channel.AudioChannel, channel.Audio)
 		}
 		if err := validateModem(path+".modem", channel.Modem, device.SampleRate); err != nil {
 			return err

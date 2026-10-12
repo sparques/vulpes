@@ -18,6 +18,12 @@ static int vulpes_pcm_configure(snd_pcm_t *pcm, unsigned int channels, unsigned 
 		channels, rate, 1, latency);
 }
 
+static int vulpes_pcm_start_capture(snd_pcm_t *pcm) {
+	if (snd_pcm_state(pcm) == SND_PCM_STATE_PREPARED)
+		return snd_pcm_start(pcm);
+	return 0;
+}
+
 static void **vulpes_pcm_hints(int *status) {
 	void **hints = NULL;
 	*status = snd_device_name_hint(-1, "pcm", &hints);
@@ -125,6 +131,12 @@ func openALSA(config DeviceConfig, capture bool) (*alsaPCM, error) {
 	if result := C.vulpes_pcm_configure(pcm, C.uint(config.PCM.Channels), C.uint(config.PCM.SampleRate), latency); result < 0 {
 		C.snd_pcm_close(pcm)
 		return nil, alsaError("configure PCM "+config.Device, result)
+	}
+	if capture {
+		if result := C.vulpes_pcm_start_capture(pcm); result < 0 {
+			C.snd_pcm_close(pcm)
+			return nil, alsaError("start capture PCM "+config.Device, result)
+		}
 	}
 	return &alsaPCM{pcm: pcm, spec: config.PCM, capture: capture}, nil
 }

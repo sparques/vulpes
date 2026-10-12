@@ -64,7 +64,12 @@ or loopback fixture:
 VULPES_TEST_SERIAL_PTT=/dev/ttyUSB0 GOCACHE=/tmp go test ./internal/ptt -run SerialHardware -v
 VULPES_TEST_GPIO_CHIP=/dev/gpiochip0 VULPES_TEST_GPIO_LINE=17 GOCACHE=/tmp go test ./internal/ptt -run GPIOHardware -v
 VULPES_TEST_CM108=/dev/hidraw2 GOCACHE=/tmp go test ./internal/ptt -run CM108Hardware -v
+VULPES_TEST_CM108_CAPTURE=hw:CARD=Device,DEV=0 VULPES_TEST_CM108_PLAYBACK=hw:CARD=Device,DEV=0 GOCACHE=/tmp go test ./internal/system -run CM108AudioLoopback -v
 ```
+
+The CM108 audio-loopback test covers 44.1 and 48 kHz S16_LE operation with
+mono capture and stereo playback. Its hidraw PTT test toggles GPIO 3; run it
+only when that output is safely connected.
 
 Without these variables the tests report a clean skip. The serial KISS suite
 uses a pseudo-terminal pair when `socat` is installed and likewise skips only

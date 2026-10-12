@@ -10,6 +10,12 @@ Common Dire Wolf modem directives map as follows:
 | Dire Wolf | Vulpes YAML |
 |---|---|
 | `ADEVICE capture playback` | `audio[].capture`, `audio[].playback` |
+| Direction-specific ALSA channel counts | `audio[].capture_channels`, `audio[].playback_channels` (fall back to `channels`) |
+
+Use the direction-specific counts when an interface has different capture and
+playback layouts. For example, the C-Media CM108 tested here is mono capture
+and stereo playback; set `capture_channels: 1` and `playback_channels: 2`.
+The legacy `channels` field remains the shared fallback for both directions.
 | `ARATE` | `audio[].sample_rate` |
 | `ACHANNELS` | `audio[].channels` |
 | `CHANNEL n` | `channels[n]` (zero-based order) |

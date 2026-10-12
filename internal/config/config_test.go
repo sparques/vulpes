@@ -53,12 +53,27 @@ func TestDecodeDefaults(t *testing.T) {
 	if configuration.Logging.Level != "info" {
 		t.Fatalf("logging level = %q", configuration.Logging.Level)
 	}
-	if got := configuration.Audio[0]; got.SampleRate != 48000 || got.Channels != 1 || got.BufferMillis != 100 {
+	if got := configuration.Audio[0]; got.SampleRate != 48000 || got.Channels != 1 ||
+		got.CaptureChannels != 1 || got.PlaybackChannels != 1 || got.BufferMillis != 100 {
 		t.Fatalf("audio defaults = %+v", got)
 	}
 	channel := configuration.Channels[0]
 	if channel.Modem.Amplitude != 0.5 || channel.Modem.Profile != "A" || channel.Modem.Slicers != 9 || channel.PTT.Type != "none" || channel.TX.DelayMillis != 300 || channel.TX.Persistence != 63 {
 		t.Fatalf("channel defaults = %+v", channel)
+	}
+}
+
+func TestDecodeDirectionSpecificAudioChannels(t *testing.T) {
+	input := strings.Replace(minimalConfig,
+		"    playback: hw:CARD=Radio,DEV=0\n",
+		"    playback: hw:CARD=Radio,DEV=0\n    capture_channels: 1\n    playback_channels: 2\n", 1)
+	configuration, err := Decode("duplex.yaml", strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	device := configuration.Audio[0]
+	if device.CaptureChannels != 1 || device.PlaybackChannels != 2 {
+		t.Fatalf("direction-specific audio channels = %+v", device)
 	}
 }
 
