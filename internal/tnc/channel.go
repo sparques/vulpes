@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,7 @@ type ChannelConfig struct {
 	Persistence       int
 	FullDuplex        bool
 	AudioChannel      int
+	VOXToneMillis     int
 }
 
 // Timing contains live per-channel KISS timing controls. Millisecond fields
@@ -75,6 +77,8 @@ type Channel struct {
 	baud              int
 	sampleRate        int
 	audioChannel      int
+	voxToneMillis     int
+	txAmplitude       float64
 	lastLevel         bool
 	timing            Timing
 	pending           []byte
@@ -108,6 +112,9 @@ func NewChannel(config ChannelConfig) (*Channel, error) {
 	if config.QueueDepth <= 0 {
 		config.QueueDepth = 16
 	}
+	if config.VOXToneMillis < 0 || config.VOXToneMillis > 30000 {
+		return nil, errors.New("VOX lead-in tone duration must be between 0 and 30000 milliseconds")
+	}
 	receiver, err := modem.NewReceiver(config.Modem, config.MaximumFrameBytes)
 	if err != nil {
 		return nil, fmt.Errorf("create receiver for channel %q: %w", config.Name, err)
@@ -128,6 +135,7 @@ func NewChannel(config ChannelConfig) (*Channel, error) {
 		maximumFrameBytes: config.MaximumFrameBytes,
 		leadingFlags:      leading, trailingFlags: trailing, symbolBits: symbolBits, baud: baud,
 		sampleRate: config.Modem.SampleRate, audioChannel: config.AudioChannel,
+		voxToneMillis: config.VOXToneMillis, txAmplitude: config.Modem.Amplitude,
 		timing: Timing{TXDelayMillis: config.TXDelayMillis, TXTailMillis: config.TXTailMillis,
 			SlotMillis: config.SlotMillis, Persistence: config.Persistence, FullDuplex: config.FullDuplex},
 		subscribers: make(map[chan modem.Event]struct{}),
@@ -368,15 +376,35 @@ func (c *Channel) TransmitNext(ctx context.Context, playback *audio.PlaybackBus,
 				}
 			}()
 		}
-		if spec.Channels == 1 {
-			return writeAll(ctx, endpoint, samples)
+		if c.voxToneMillis > 0 {
+			tone := voxTone(c.sampleRate, c.voxToneMillis, c.txAmplitude)
+			if err := writeChannelSamples(ctx, endpoint, tone, spec.Channels, c.audioChannel); err != nil {
+				return fmt.Errorf("write VOX lead-in tone: %w", err)
+			}
 		}
-		interleaved := make([]int16, len(samples)*spec.Channels)
-		for i, sample := range samples {
-			interleaved[i*spec.Channels+c.audioChannel] = sample
-		}
-		return writeAll(ctx, endpoint, interleaved)
+		return writeChannelSamples(ctx, endpoint, samples, spec.Channels, c.audioChannel)
 	})
+}
+
+func writeChannelSamples(ctx context.Context, playback audio.Playback, samples []int16, channels, audioChannel int) error {
+	if channels == 1 {
+		return writeAll(ctx, playback, samples)
+	}
+	interleaved := make([]int16, len(samples)*channels)
+	for i, sample := range samples {
+		interleaved[i*channels+audioChannel] = sample
+	}
+	return writeAll(ctx, playback, interleaved)
+}
+
+func voxTone(sampleRate, durationMillis int, amplitude float64) []int16 {
+	count := sampleRate * durationMillis / 1000
+	samples := make([]int16, count)
+	scale := amplitude * math.MaxInt16
+	for i := range samples {
+		samples[i] = int16(math.Round(math.Sin(2*math.Pi*400*float64(i)/float64(sampleRate)) * scale))
+	}
+	return samples
 }
 
 func writeAll(ctx context.Context, playback audio.Playback, samples []int16) error {

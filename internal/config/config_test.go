@@ -77,6 +77,28 @@ func TestDecodeDirectionSpecificAudioChannels(t *testing.T) {
 	}
 }
 
+func TestDecodeVOXToneDuration(t *testing.T) {
+	input := strings.Replace(minimalConfig,
+		"    audio: radio\n", "    audio: radio\n    ptt:\n      type: vox\n", 1)
+	configuration, err := Decode("vox.yaml", strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := configuration.Channels[0].TX.VOXToneMillis; got != 2000 {
+		t.Fatalf("default VOX tone duration = %d ms, want 2000", got)
+	}
+
+	input = strings.Replace(input,
+		"      type: vox\n", "      type: vox\n    tx:\n      vox_tone_ms: 750\n", 1)
+	configuration, err = Decode("vox-custom.yaml", strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := configuration.Channels[0].TX.VOXToneMillis; got != 750 {
+		t.Fatalf("configured VOX tone duration = %d ms, want 750", got)
+	}
+}
+
 func TestDecodeRejectsUnknownAndDuplicateFields(t *testing.T) {
 	tests := []string{
 		strings.Replace(minimalConfig, "version: 1", "version: 1\nunknown: true", 1),

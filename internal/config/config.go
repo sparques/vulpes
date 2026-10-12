@@ -96,11 +96,12 @@ type CM108PTT struct {
 }
 
 type TX struct {
-	DelayMillis int  `yaml:"delay_ms,omitempty"`
-	TailMillis  int  `yaml:"tail_ms,omitempty"`
-	SlotMillis  int  `yaml:"slot_ms,omitempty"`
-	Persistence int  `yaml:"persistence,omitempty"`
-	FullDuplex  bool `yaml:"full_duplex,omitempty"`
+	DelayMillis   int  `yaml:"delay_ms,omitempty"`
+	TailMillis    int  `yaml:"tail_ms,omitempty"`
+	SlotMillis    int  `yaml:"slot_ms,omitempty"`
+	Persistence   int  `yaml:"persistence,omitempty"`
+	FullDuplex    bool `yaml:"full_duplex,omitempty"`
+	VOXToneMillis int  `yaml:"vox_tone_ms,omitempty"`
 }
 
 type Interfaces struct {
@@ -201,6 +202,9 @@ func (c *Config) applyDefaults() {
 		if channel.TX.Persistence == 0 {
 			channel.TX.Persistence = 63
 		}
+		if channel.PTT.Type == "vox" && channel.TX.VOXToneMillis == 0 {
+			channel.TX.VOXToneMillis = 2000
+		}
 		switch channel.PTT.Type {
 		case "serial":
 			if channel.PTT.Serial.RTSActive == "" {
@@ -280,7 +284,7 @@ func (c Config) Validate() error {
 		if err := validatePTT(path+".ptt", channel.PTT); err != nil {
 			return err
 		}
-		if channel.TX.DelayMillis < 0 || channel.TX.TailMillis < 0 || channel.TX.SlotMillis < 1 || channel.TX.Persistence < 0 || channel.TX.Persistence > 255 {
+		if channel.TX.DelayMillis < 0 || channel.TX.TailMillis < 0 || channel.TX.SlotMillis < 1 || channel.TX.Persistence < 0 || channel.TX.Persistence > 255 || channel.TX.VOXToneMillis < 0 || channel.TX.VOXToneMillis > 30000 {
 			return fmt.Errorf("%s.tx: timing or persistence is out of range", path)
 		}
 	}

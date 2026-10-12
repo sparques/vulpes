@@ -31,6 +31,7 @@ The legacy `channels` field remains the shared fallback for both directions.
 | `PTT ... RTS/DTR` | `ptt.type: serial` and `ptt.serial` |
 | `PTT GPIO` | `ptt.type: gpio` and `ptt.gpio` |
 | `PTT CM108` | `ptt.type: cm108` and `ptt.cm108` |
+| VOX lead-in tone | `ptt.type: vox` and `tx.vox_tone_ms` (400 Hz; defaults to 2000 ms) |
 | `KISSPORT` | `interfaces.kiss_tcp[].listen` |
 | `AGWPORT` | `interfaces.agw_tcp[].listen` |
 
@@ -55,3 +56,8 @@ Command-line overrides apply to the first configured audio device or channel:
 
 `-wav-input` and `-wav-output` provide deterministic offline operation. WAV
 input must exactly match the configured sample rate and channel count.
+
+For VOX operation, Vulpes sends a 400 Hz audio tone before each modulated frame
+to open the remote transmitter. Set `tx.vox_tone_ms` per channel to change the
+duration; the default is 2000 ms. This setting is used only when
+`ptt.type: vox`.

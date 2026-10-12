@@ -19,6 +19,10 @@ func NewConfiguredChannels(configuration config.Config) (map[string]*Channel, er
 	}
 	channels := make(map[string]*Channel, len(configuration.Channels))
 	for _, configured := range configuration.Channels {
+		voxToneMillis := 0
+		if configured.PTT.Type == "vox" {
+			voxToneMillis = configured.TX.VOXToneMillis
+		}
 		channel, err := NewChannel(ChannelConfig{
 			Name: configured.Name,
 			Modem: modem.Settings{
@@ -31,8 +35,9 @@ func NewConfiguredChannels(configuration config.Config) (map[string]*Channel, er
 			MaximumFrameBytes: defaultMaximumFrameBytes, QueueDepth: 16,
 			TXDelayMillis: configured.TX.DelayMillis, TXTailMillis: configured.TX.TailMillis,
 			SlotMillis: configured.TX.SlotMillis, Persistence: configured.TX.Persistence,
-			FullDuplex:   configured.TX.FullDuplex,
-			AudioChannel: configured.AudioChannel,
+			FullDuplex:    configured.TX.FullDuplex,
+			AudioChannel:  configured.AudioChannel,
+			VOXToneMillis: voxToneMillis,
 		})
 		if err != nil {
 			for _, opened := range channels {

@@ -282,6 +282,9 @@ channel, writes the full burst, and fail-safely unkeys on cancellation/errors.
 - [x] Define a PTT interface with key/unkey sequencing and fail-safe unkey on
   cancellation or playback/device error; channel close interrupts pending
   waits and controller shutdown unkeys hardware.
+- [x] For `ptt.type: vox`, prepend a 400 Hz audio lead-in before each encoded
+  frame, defaulting to 2000 ms with a per-channel `tx.vox_tone_ms` override;
+  verify tone frequency, duration, routing, and config defaults.
 - [x] Implement serial-port PTT compatible with Dire Wolf: selectable RTS and/or
   DTR control lines, independent active-high/active-low polarity, and safe
   initial/final line state.

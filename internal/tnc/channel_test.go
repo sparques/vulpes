@@ -5,9 +5,11 @@ package tnc
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"testing"
 
+	"github.com/sparques/vulpes/internal/audio"
 	"github.com/sparques/vulpes/internal/modem"
 )
 
@@ -106,6 +108,56 @@ func TestChannelTimingAndSymbolAlignment(t *testing.T) {
 		if len(got)%bits != 0 {
 			t.Fatalf("%d-bit symbols left %d bits", bits, len(got))
 		}
+	}
+}
+
+func TestTransmitNextPrependsVOXTone(t *testing.T) {
+	channel, err := NewChannel(ChannelConfig{
+		Name: "vox", QueueDepth: 1, TXDelayMillis: 1, TXTailMillis: 1,
+		SlotMillis: 1, Persistence: 255, FullDuplex: true, AudioChannel: 1, VOXToneMillis: 100,
+		Modem: modem.Settings{Mode: "afsk1200", SampleRate: 48000, Amplitude: .5, Profile: "A", Slicers: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer channel.Close()
+	playback, err := audio.NewSlicePlayback(audio.Spec{SampleRate: 48000, Channels: 2, Format: audio.Signed16LE})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus, err := audio.NewPlaybackBus(playback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := channel.QueueFrame([]byte("vox")); err != nil {
+		t.Fatal(err)
+	}
+	if err := channel.TransmitNext(context.Background(), bus, nil); err != nil {
+		t.Fatal(err)
+	}
+	pcm := playback.Samples()
+	toneFrames := 4800
+	if len(pcm) <= toneFrames*2 {
+		t.Fatalf("transmission has %d interleaved samples, expected VOX tone plus frame", len(pcm))
+	}
+	for frame := 0; frame < toneFrames; frame++ {
+		if pcm[frame*2] != 0 {
+			t.Fatalf("left channel sample %d = %d, want silence", frame, pcm[frame*2])
+		}
+		want := int16(math.Round(math.Sin(2*math.Pi*400*float64(frame)/48000) * .5 * 32767))
+		if pcm[frame*2+1] != want {
+			t.Fatalf("VOX tone sample %d = %d, want 400 Hz sample %d", frame, pcm[frame*2+1], want)
+		}
+	}
+	frameHasSignal := false
+	for _, sample := range pcm[toneFrames*2:] {
+		if sample != 0 {
+			frameHasSignal = true
+			break
+		}
+	}
+	if !frameHasSignal {
+		t.Fatal("modulated frame did not follow VOX tone")
 	}
 }
 
