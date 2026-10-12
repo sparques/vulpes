@@ -1,24 +1,111 @@
+# Strict schema version 1. Unknown/duplicate fields and multiple YAML
+# documents are rejected. See ../docs/configuration.md for the full schema.
 version: 1
+
 logging:
-  level: info
+  level: info # debug, info, warn, or error; default info.
+  # file: /var/log/vulpes.log # Optional; append logs here instead of stdout.
+
 audio:
-  - name: radio
-    capture: default
-    playback: default
-    sample_rate: 48000
-    channels: 1
-    buffer_ms: 100
+  - name: radio # Required unique name.
+    capture: default # ALSA device name, e.g. default, hw:3,0, or hw:CARD=Device,DEV=0.
+    playback: default # Also accepts memory or wav:PATH for test/file operation.
+    sample_rate: 48000 # 8000..192000 Hz; default 48000.
+    channels: 1 # 1 or 2; fallback for direction-specific counts; default 1.
+    capture_channels: 1 # Optional 1 or 2; this device is mono capture.
+    playback_channels: 2 # Optional 1 or 2; example asymmetric stereo playback.
+    buffer_ms: 100 # 1..5000 ms; default 100.
+
+# Channel names must be unique and audio must name an audio entry above.
+# Channel order is KISS/AGW port order (zero-based); KISS allows up to 16.
+# audio_channel is zero-based and must exist in both capture and playback.
 channels:
-  - {name: afsk300, audio: radio, modem: {mode: afsk300, profile: A, slicers: 9}}
-  - {name: afsk1200, audio: radio, modem: {mode: afsk1200, profile: B, slicers: 9}}
-  - {name: v26a, audio: radio, modem: {mode: psk2400, profile: R, variant: V26A}}
-  - {name: v26b, audio: radio, modem: {mode: psk2400, profile: R, variant: V26B}}
-  - {name: v27, audio: radio, modem: {mode: psk4800, profile: V}}
-  - {name: g3ruh, audio: radio, modem: {mode: g3ruh9600}}
-  - {name: ais, audio: radio, modem: {mode: ais}}
-  - {name: eas, audio: radio, modem: {mode: eas}}
+  - name: afsk300
+    audio: radio
+    audio_channel: 0
+    modem:
+      mode: afsk300 # 300-baud AFSK; default tones 1600/1800 Hz.
+      amplitude: 0.5 # >0..1; default 0.5.
+      profile: A # A (default A+) or B; AFSK only.
+      slicers: 9 # AFSK only, 1..9; default 9.
+    ptt:
+      type: none # none (default), vox, serial, gpio, or cm108.
+    tx:
+      delay_ms: 300 # Nonnegative; zero defaults to 300 ms.
+      tail_ms: 100 # Nonnegative; zero defaults to 100 ms.
+      slot_ms: 100 # Positive; zero defaults to 100 ms.
+      persistence: 63 # 0..255; zero defaults to 63.
+      full_duplex: false # true bypasses carrier-busy arbitration.
+
+  - name: afsk1200
+    audio: radio
+    modem:
+      mode: afsk1200 # 1200-baud AFSK; default tones 1200/2200 Hz.
+      profile: B # A or B; B selects the FM discriminator.
+      slicers: 9 # 1..9.
+
+  - name: v26a
+    audio: radio
+    modem:
+      mode: psk2400 # 2400-baud QPSK.
+      profile: R # P, Q, R, or S; default R.
+      variant: V26A # V26A or V26B; default V26B.
+
+  - name: v26b
+    audio: radio
+    modem:
+      mode: psk2400
+      profile: R
+      variant: V26B
+
+  - name: v27
+    audio: radio
+    modem:
+      mode: psk4800 # 4800-baud 8PSK.
+      profile: V # T, U, V, or W; default V.
+
+  - name: g3ruh
+    audio: radio
+    modem:
+      mode: g3ruh9600 # 9600-baud G3RUH/GMSK.
+      # Optional 0..4; 0 (default) selects automatic receive interpolation.
+      upsample: 0
+
+  - name: ais
+    audio: radio
+    modem:
+      mode: ais # Receive-only; profile/variant/slicers/upsample do not apply.
+
+  - name: eas
+    audio: radio
+    modem:
+      mode: eas # Receive-only EAS SAME; defaults to mark/space 2083.33/1562.5 Hz.
+      # Optional custom tone frequencies: set both, distinct and < sample_rate/2.
+      # mark_hz: 2083.33
+      # space_hz: 1562.5
+
+# For custom AFSK tones use modem.mark_hz and modem.space_hz together; defaults
+# are 1600/1800 Hz for afsk300 and 1200/2200 Hz for afsk1200. These tone fields
+# are ignored by PSK/G3RUH/AIS and should be omitted there.
+# PTT type-specific blocks: serial requires device and rts and/or dtr; each
+# active polarity is high/low (default high). gpio requires chip, line >=0,
+# and active high/low. cm108 device is optional (auto-discovery), gpio is 1..8
+# (default 3), active high/low. vox has no nested block and sends a 400 Hz tone.
+# For VOX, tx.vox_tone_ms is 0..30000 ms; omitted/zero defaults to 2000 ms.
+# TX persistence is 0..255; slot_ms must be positive; delay/tail are nonnegative.
+
 interfaces:
   kiss_tcp:
-    - {listen: "127.0.0.1:8001"}
+    - listen: 127.0.0.1:8001 # TCP listen address; use :8001 or 0.0.0.0:8001
+      # to accept non-local connections. Optional channel binds to one name;
+      # otherwise port nibble maps to channels in order (ports 0..15).
+  # Optional KISS serial endpoint: required device, positive baud (default 9600),
+  # optional channel binding. When unbound the KISS port nibble selects a channel.
+  # kiss_serial:
+  #   - device: /dev/ttyUSB1
+  #     baud: 9600
+  #     channel: afsk1200
   agw_tcp:
-    - {listen: "127.0.0.1:8000"}
+    - listen: 127.0.0.1:8000 # TCP listen address; all channels exposed by order.
+      # Do not set channel for AGW; the shared listener schema accepts it but
+      # AGW currently ignores it.

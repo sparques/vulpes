@@ -256,6 +256,15 @@ both modes reject corrupted and truncated transmissions in regression tests.
 Acceptance: known AIS frames pass FCS and reproduce their payload/NMEA output;
 known EAS broadcasts reproduce the expected SAME text with duplicate handling.
 
+### 6a. Public streaming modem API for firmware
+
+- [x] Add an externally importable `pkg/modem` facade over internal modem and
+  HDLC packages, exposing PCM chunk decoding and payload-to-PCM encoding.
+- [x] Keep the package independent of ALSA, YAML, CLI, and host I/O; expose
+  AIS/EAS receive metadata and read-only transmit errors.
+- [x] Document I2S integration and verify Go tests plus TinyGo WASM and RP2040
+  compile targets.
+
 ### 7. TNC runtime and transmit control
 
 Partial implementation note: `internal/modem.NewReceiver` and

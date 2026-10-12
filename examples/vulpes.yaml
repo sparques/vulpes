@@ -1,55 +1,104 @@
-# Vulpes configuration schema version.
+# Vulpes accepts one strict YAML document. Unknown/duplicate fields and
+# multiple documents are errors. The only supported schema version is 1.
 version: 1
 
 logging:
+  # debug, info, warn, or error (case-insensitive); default: info.
   level: info
-  # Logs go to stdout when file is omitted.
+  # Optional writable path. When set, logs append here instead of stdout.
   # file: /var/log/vulpes.log
 
 audio:
-  - name: radio
+  - name: radio             # Required and unique; channels refer to this name.
+    # ALSA names: default, hw:3,0, hw:CARD=Device,DEV=0, etc.
+    # Also supported: memory, or wav:PATH for file-based testing.
     capture: hw:CARD=Radio,DEV=0
     playback: hw:CARD=Radio,DEV=0
+    # 8000..192000 Hz; default 48000. The modem must support the selected rate.
     sample_rate: 48000
+    # 1 or 2; default 1 and fallback for both direction-specific counts.
     channels: 1
+    # Optional 1 or 2 overrides for asymmetric devices. Example for many
+    # CM108 cards: mono capture and stereo playback.
+    # capture_channels: 1
+    # playback_channels: 2
+    # PCM buffer duration, 1..5000 ms; default 100.
     buffer_ms: 100
 
 channels:
-  - name: vhf
-    audio: radio
+  - name: vhf                  # Required, unique; order determines KISS/AGW port.
+    audio: radio               # Required reference to an audio.name.
+    # Zero-based channel present in both capture and playback; default 0.
     audio_channel: 0
     modem:
+      # afsk300, afsk1200, psk2400, psk4800, g3ruh9600, ais, or eas.
+      # AIS and EAS are receive-only.
       mode: afsk1200
+      # 0 < amplitude <= 1; default 0.5. Transmit amplitude where applicable.
       amplitude: 0.5
-      # Dire Wolf profile A with its A+ nine-slicer receive strategy.
-      # Profile B selects Dire Wolf's FM discriminator instead.
+      # AFSK: A (default; Dire Wolf A+) or B (FM discriminator); 1..9 slicers.
+      # PSK2400 profiles P/Q/R/S; PSK4800 profiles T/U/V/W.
       profile: A
       slicers: 9
+      # Optional custom AFSK/EAS tone pair. Specify both; distinct positive
+      # values below sample_rate/2. Defaults: AFSK300 1600/1800,
+      # AFSK1200 1200/2200, EAS 2083.33/1562.5 Hz. Omit for other modes.
+      # mark_hz: 1200
+      # space_hz: 2200
+      # For PSK2400 only: V26A or V26B (default V26B). Omit otherwise.
+      # variant: V26B
+      # For g3ruh9600 only: 0..4 (0 is automatic receive interpolation).
+      # upsample: 0
     ptt:
+      # none (default), vox, serial, gpio, or cm108. Configure exactly the
+      # nested block for the selected type. `vox` sends a 400 Hz lead-in tone.
       type: serial
       serial:
+        # Required serial device; RTS and/or DTR must be enabled.
         device: /dev/ttyUSB0
         rts: true
+        # dtr: false
+        # high or low asserted/keyed electrical level; default high.
         rts_active: high
+        # dtr_active: high
+      # Alternative: Linux GPIO PTT. `line` is a non-negative line offset.
+      # gpio:
+      #   chip: /dev/gpiochip0
+      #   line: 17
+      #   active: high       # high or low; default high.
+      # Alternative: CM108 HID PTT. GPIO is 1..8, default 3; device may be
+      # omitted for compatible-device discovery; active defaults to high.
+      # cm108:
+      #   device: /dev/hidraw3
+      #   gpio: 3
+      #   active: high
+      # For type: vox, `tx.vox_tone_ms` controls the 400 Hz lead-in (default 2000).
     tx:
+      # Non-negative ms; defaults 300/100. Zero selects the default.
       delay_ms: 300
       tail_ms: 100
+      # Positive ms; default 100. Zero selects the default.
       slot_ms: 100
+      # 0..255; default 63. Higher values increase clear-channel TX probability.
       persistence: 63
-
-# For PSK, set profile to one of P/Q/R/S at 2400 or T/U/V/W at 4800.
-# Defaults are R for 2400 and V for 4800. 2400 variant defaults to V26B;
-# choose V26A for Dire Wolf 1.5 and earlier compatibility.
-# For 9600 G3RUH, optional upsample: 1..4 selects receive polyphase
-# interpolation; omit it (or use 0) for Dire Wolf's sample-rate-based default.
+      # false by default; true bypasses carrier-busy arbitration.
+      full_duplex: false
+      # Only for ptt.type: vox; 0..30000 ms. Zero/omitted uses 2000 ms for VOX.
+      # vox_tone_ms: 2000
 
 interfaces:
   kiss_tcp:
-    - listen: 127.0.0.1:8001
+    - listen: 127.0.0.1:8001 # Go TCP address; localhost only. Use :8001 or
+      # 0.0.0.0:8001 for other interfaces. Channel is optional; if omitted,
+      # KISS port 0..15 selects configured channel order (at most 16 channels).
       channel: vhf
+  # KISS serial is optional. Device required, baud positive (default 9600),
+  # channel optional (otherwise selected by the KISS port nibble).
   # kiss_serial:
   #   - device: /dev/ttyUSB1
   #     baud: 9600
   #     channel: vhf
   agw_tcp:
-    - listen: 127.0.0.1:8000
+    - listen: 127.0.0.1:8000 # Go TCP listen address; all channels are exposed
+      # in configured order. Omit `channel` for AGW (accepted by the shared
+      # listener schema but currently has no effect).
