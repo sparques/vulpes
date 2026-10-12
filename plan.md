@@ -265,6 +265,18 @@ known EAS broadcasts reproduce the expected SAME text with duplicate handling.
 - [x] Document I2S integration and verify Go tests plus TinyGo WASM and RP2040
   compile targets.
 
+### 6b. Embeddable ALSA-backed Go runtime
+
+- [x] Add `pkg/alsamodem` as a programmatic ALSA/PTT runtime over the internal
+  audio, modem, PTT, and TNC packages; keep CLI, YAML, KISS, and AGW concerns
+  outside the package.
+- [x] Expose channel lookup, frame queueing, receive events, live timing,
+  metrics, runtime error reporting, and deterministic close/context lifecycle.
+- [x] Document configuration and embedding usage; test defaults, validation,
+  and config ownership without requiring audio hardware.
+- [x] Verify the package and full repository with Go tests/build and
+  `git diff --check`.
+
 ### 7. TNC runtime and transmit control
 
 Partial implementation note: `internal/modem.NewReceiver` and
@@ -472,8 +484,9 @@ the reference supports transmission.
 
 ## Deferred decisions to resolve before their milestone
 
-- Exact module path and public API commitment (initial packages should remain
-  `internal` until their boundaries settle).
+- Public package boundaries are now `pkg/modem` for caller-provided PCM and
+  `pkg/alsamodem` for the ALSA-backed embedded runtime; future API changes
+  should preserve these distinct I/O ownership models.
 - GPL-compatible licensing/attribution approach for a source-guided
   reimplementation.
 - ALSA and serial dependency versions after proof-of-concept tests; pin
