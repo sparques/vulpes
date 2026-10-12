@@ -30,10 +30,17 @@ permissions, hardware acceptance, and deterministic WAV operation.
 
 ## Current limitations
 
-Vulpes is not yet release-ready. The CLI connects configured channels to live
-ALSA or deterministic WAV audio, KISS TCP/serial, AGW services, and
-PTT backends. Deterministic and Dire Wolf cross-tests cover every modem; real
-audio and GPIO acceptance still requires the documented hardware test host.
+Vulpes is usable for on-air modem/TNC operation. In a user-reported hardware
+test, a CM108 adapter handled PTT while Vulpes successfully sent to and
+received from a radio running Dire Wolf. This confirms a real two-way radio
+path for that setup; it is not a claim that every modem mode, audio device, or
+PTT backend has been hardware-validated.
+
+The CLI connects configured channels to live ALSA or deterministic WAV audio,
+KISS TCP/serial, AGW services, and supported PTT backends. Deterministic and
+Dire Wolf cross-tests cover every modem. Vulpes remains under active
+development and is not yet release-ready; see the documented hardware tests
+for the additional coverage needed across devices and PTT backends.
 
 The AGWPE service implements raw and monitor traffic, unproto transmission,
 queries, callsign registration, and modulo-8 connected mode with a one-frame
